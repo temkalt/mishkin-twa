@@ -148,9 +148,7 @@ router.get('/', async (req, res) => {
     const adminIdsRaw = process.env.ADMIN_IDS || '';
     const adminIds = adminIdsRaw.split(',').map((id) => parseInt(id.trim(), 10));
     
-    // Если пользователь админ, или мы пропускаем проверку для теста (у пользователя нет id)
-    // Разрешаем видеть все заказы для демо-целей, если это не Telegram-клиент
-    const isUserAdmin = adminIds.includes(telegramUserId) || telegramUserId === 0;
+    const isUserAdmin = adminIds.includes(telegramUserId);
 
     const orders = await prisma.order.findMany({
       where: isUserAdmin ? undefined : { telegramUserId: BigInt(telegramUserId) },

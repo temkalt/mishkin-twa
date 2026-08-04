@@ -11,10 +11,7 @@ export function isAdmin(req: Request, res: Response, next: NextFunction): void {
   const userId = req.telegramUser?.id;
 
   if (!userId || !adminIds.includes(userId)) {
-    // ДЕМО-РЕЖИМ: Временно разрешаем доступ всем, чтобы вы могли протестировать админку
-    // без использования Telegram (прямо из браузера).
-    // Перед реальным запуском эту проверку нужно будет вернуть!
-    next();
+    res.status(403).json({ error: 'Access denied: Admins only' });
     return;
   }
 
