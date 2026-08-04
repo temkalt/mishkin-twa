@@ -4,10 +4,10 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://your-app.ngrok-free.app';
 
 if (!BOT_TOKEN) {
-  throw new Error('BOT_TOKEN is required in .env');
+  console.error('CRITICAL: BOT_TOKEN is missing!');
 }
 
-export const bot = new Telegraf(BOT_TOKEN);
+export const bot = new Telegraf(BOT_TOKEN || 'dummy_token');
 
 // /start command
 bot.start(async (ctx) => {
