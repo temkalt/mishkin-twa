@@ -1,19 +1,23 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useCartStore } from '../store/useCartStore';
+import { useUserStore } from '../store/useUserStore';
 
-const tabs = [
+const ALL_TABS = [
   { path: '/', icon: 'home', label: 'Главная' },
   { path: '/catalog', icon: 'grid_view', label: 'Каталог' },
   { path: '/cart', icon: 'shopping_bag', label: 'Корзина' },
   { path: '/orders', icon: 'receipt_long', label: 'Заказы' },
-  { path: '/admin', icon: 'admin_panel_settings', label: 'Админ' },
+  { path: '/admin', icon: 'admin_panel_settings', label: 'Админ', adminOnly: true },
 ];
 
 export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const cartCount = useCartStore((s) => s.getItemCount());
+  const isAdmin = useUserStore((s) => s.isAdmin);
+  
+  const tabs = ALL_TABS.filter(t => !t.adminOnly || isAdmin);
 
   // Hide on product detail page
   if (location.pathname.startsWith('/product/') || location.pathname === '/admin') {

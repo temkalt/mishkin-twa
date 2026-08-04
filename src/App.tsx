@@ -13,6 +13,7 @@ import { Orders } from './pages/Orders';
 import { Admin } from './pages/Admin';
 import { api } from './utils/api';
 import type { UserAuth } from './utils/types';
+import { useUserStore } from './store/useUserStore';
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -33,7 +34,11 @@ function App() {
     }
 
     // Authenticate user with backend
-    api.post<UserAuth>('/users/auth', {}).catch((err) => {
+    api.post<UserAuth>('/users/auth', {}).then((data) => {
+      if (data.isAdmin) {
+        useUserStore.getState().setAdmin(true);
+      }
+    }).catch((err) => {
       console.warn('Auth failed (ok in dev without server):', err.message);
     });
   }, []);
