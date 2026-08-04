@@ -8,6 +8,9 @@ import WebApp from '@twa-dev/sdk'
 try {
   WebApp.ready();
   WebApp.expand();
+  if (WebApp.requestFullscreen) {
+    WebApp.requestFullscreen();
+  }
 } catch (e) {
   console.warn('WebApp init failed', e);
 }

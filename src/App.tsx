@@ -21,6 +21,11 @@ function App() {
   useEffect(() => {
     // Initialize Telegram Web App
     if (WebApp.initData) {
+      WebApp.ready();
+      WebApp.expand();
+      if (WebApp.requestFullscreen) {
+        WebApp.requestFullscreen();
+      }
       // Setup theme based on TG
       if (WebApp.colorScheme === 'dark') {
         document.documentElement.classList.add('dark');
