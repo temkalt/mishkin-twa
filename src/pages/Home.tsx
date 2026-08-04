@@ -103,7 +103,7 @@ export function Home() {
         transition={{ delay: 0.15, type: 'spring', damping: 25 }}
       >
         <div className="mb-4 flex items-center justify-between px-5">
-          <h3 className="font-display text-lg font-bold text-text-main">Бестселлеры</h3>
+          <h3 className="font-display text-lg font-bold text-text-main">Популярные ароматы</h3>
           <button
             onClick={() => navigate('/catalog')}
             className="text-xs font-semibold text-primary uppercase tracking-wider"
@@ -219,7 +219,7 @@ export function Home() {
           <span className="mb-2 inline-block text-[10px] font-bold uppercase tracking-widest text-primary">
             О нас
           </span>
-          <h3 className="mb-2 font-display text-xl font-bold text-text-main">Slow Living Art</h3>
+          <h3 className="mb-2 font-display text-xl font-bold text-text-main">Искусство создания уюта</h3>
           <p className="text-sm leading-relaxed text-text-sub">
             Каждая свеча MISHKIN — это медитация ручного труда. Мы отбираем лучший соевый воск,
             смешиваем его с эфирными маслами от фермеров Прованса и создаём ароматы, которые

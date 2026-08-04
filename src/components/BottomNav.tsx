@@ -7,6 +7,7 @@ const tabs = [
   { path: '/catalog', icon: 'grid_view', label: 'Каталог' },
   { path: '/cart', icon: 'shopping_bag', label: 'Корзина' },
   { path: '/orders', icon: 'receipt_long', label: 'Заказы' },
+  { path: '/admin', icon: 'admin_panel_settings', label: 'Админ' },
 ];
 
 export function BottomNav() {
