@@ -29,6 +29,10 @@ export interface OrderCreatePayload {
   userName: string;
   userPhone: string;
   userCity: string;
+  userAddress: string;
+  userPostal: string;
+  deliveryMethod: string;
+  comment: string;
   promoCode?: string;
 }
 

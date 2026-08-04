@@ -22,6 +22,10 @@ export function Cart() {
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [userCity, setUserCity] = useState('');
+  const [userAddress, setUserAddress] = useState('');
+  const [userPostal, setUserPostal] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState('СДЭК');
+  const [comment, setComment] = useState('');
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<OrderResponse | null>(null);
 
@@ -92,6 +96,10 @@ export function Cart() {
         userName: userName.trim(),
         userPhone: userPhone.trim(),
         userCity: userCity.trim(),
+        userAddress: userAddress.trim(),
+        userPostal: userPostal.trim(),
+        deliveryMethod,
+        comment: comment.trim(),
         promoCode: promoData?.code,
       });
 
@@ -173,7 +181,7 @@ export function Cart() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Телефон</label>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Телефон *</label>
             <input
               type="tel"
               value={userPhone}
@@ -182,14 +190,61 @@ export function Cart() {
               className="w-full rounded-xl border border-pastel-sand bg-white px-4 py-3.5 text-text-main outline-none focus:border-primary transition-colors"
             />
           </div>
+          
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Город</label>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Способ доставки *</label>
+            <select
+              value={deliveryMethod}
+              onChange={(e) => setDeliveryMethod(e.target.value)}
+              className="w-full rounded-xl border border-pastel-sand bg-white px-4 py-3.5 text-text-main outline-none focus:border-primary transition-colors"
+            >
+              <option value="СДЭК">СДЭК</option>
+              <option value="Почта России">Почта России</option>
+              <option value="Boxberry">Boxberry</option>
+              <option value="Самовывоз">Самовывоз</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Город *</label>
             <input
               type="text"
               value={userCity}
               onChange={(e) => setUserCity(e.target.value)}
               placeholder="Город доставки"
               className="w-full rounded-xl border border-pastel-sand bg-white px-4 py-3.5 text-text-main outline-none focus:border-primary transition-colors"
+            />
+          </div>
+          
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Точный адрес *</label>
+            <input
+              type="text"
+              value={userAddress}
+              onChange={(e) => setUserAddress(e.target.value)}
+              placeholder="Улица, дом, квартира / ПВЗ"
+              className="w-full rounded-xl border border-pastel-sand bg-white px-4 py-3.5 text-text-main outline-none focus:border-primary transition-colors"
+            />
+          </div>
+          
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Почтовый индекс</label>
+            <input
+              type="text"
+              value={userPostal}
+              onChange={(e) => setUserPostal(e.target.value)}
+              placeholder="000000"
+              className="w-full rounded-xl border border-pastel-sand bg-white px-4 py-3.5 text-text-main outline-none focus:border-primary transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-sub">Комментарий</label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Пожелания к заказу..."
+              className="w-full rounded-xl border border-pastel-sand bg-white px-4 py-3.5 text-text-main outline-none focus:border-primary transition-colors resize-none min-h-[100px]"
             />
           </div>
         </div>
@@ -216,7 +271,7 @@ export function Cart() {
           className="mt-6 w-full rounded-xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-50"
           whileTap={{ scale: 0.97 }}
           onClick={handleOrder}
-          disabled={!userName.trim() || isOrdering}
+          disabled={!userName.trim() || !userPhone.trim() || !userCity.trim() || !userAddress.trim() || isOrdering}
         >
           {isOrdering ? 'Оформляем...' : `ЗАКАЗАТЬ — ${finalTotal.toLocaleString('ru-RU')} ₽`}
         </motion.button>

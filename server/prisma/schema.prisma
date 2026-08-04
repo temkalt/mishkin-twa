@@ -53,6 +53,11 @@ model Order {
   userName       String
   userPhone      String   @default("")
   userCity       String   @default("")
+  userAddress    String   @default("")
+  userPostal     String   @default("")
+  deliveryMethod String   @default("CDEK") // СДЭК, Почта России, Самовывоз
+  comment        String   @default("")
+  tgUsername     String?
   items          String   // JSON: [{ productId, name, price, qty }]
   totalPrice     Int      // итоговая сумма в копейках
   promoCode      String?

@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 
 interface OrderItem {
-  id: number;
+  productId: number;
   qty: number;
   price: number;
-  product: { name: string; images: string };
+  name: string;
+  image?: string;
 }
 
 interface AdminOrder {
@@ -18,6 +19,11 @@ interface AdminOrder {
   userName: string;
   userPhone: string;
   userCity: string;
+  userAddress: string;
+  userPostal: string;
+  deliveryMethod: string;
+  comment: string;
+  tgUsername: string | null;
   createdAt: string;
   items: OrderItem[];
   user: { telegramId: number; firstName: string; username: string | null };
@@ -387,8 +393,8 @@ export function Admin() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="material-symbols-outlined text-[14px] text-text-sub">person</span>
                         <span className="text-xs font-medium text-text-main">{order.userName}</span>
-                        {order.user?.username && (
-                          <span className="text-xs text-primary">@{order.user.username}</span>
+                        {(order.tgUsername || order.user?.username) && (
+                          <span className="text-xs text-primary">@{order.tgUsername || order.user?.username}</span>
                         )}
                       </div>
                       {order.userPhone && (
@@ -398,17 +404,35 @@ export function Admin() {
                         </div>
                       )}
                       {order.userCity && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mb-1">
                           <span className="material-symbols-outlined text-[14px] text-text-sub">location_on</span>
                           <span className="text-xs text-text-sub">{order.userCity}</span>
+                        </div>
+                      )}
+                      {order.userAddress && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="material-symbols-outlined text-[14px] text-text-sub">home</span>
+                          <span className="text-xs text-text-sub">{order.userAddress} {order.userPostal && `(${order.userPostal})`}</span>
+                        </div>
+                      )}
+                      {order.deliveryMethod && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="material-symbols-outlined text-[14px] text-text-sub">local_shipping</span>
+                          <span className="text-xs text-text-sub">{order.deliveryMethod}</span>
+                        </div>
+                      )}
+                      {order.comment && (
+                        <div className="flex items-start gap-2 mt-2 pt-2 border-t border-pastel-sand/30">
+                          <span className="material-symbols-outlined text-[14px] text-text-sub mt-0.5">chat</span>
+                          <span className="text-xs text-text-sub italic">{order.comment}</span>
                         </div>
                       )}
                     </div>
 
                     <div className="mb-3 flex flex-col gap-1.5">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-xs">
-                          <span className="text-text-main">{item.product.name} × {item.qty}</span>
+                      {order.items.map((item, i) => (
+                        <div key={item.productId || i} className="flex items-center justify-between text-xs">
+                          <span className="text-text-main">{item.name} × {item.qty}</span>
                           <span className="font-medium text-text-sub">{(item.price / 100).toLocaleString('ru-RU')} ₽</span>
                         </div>
                       ))}

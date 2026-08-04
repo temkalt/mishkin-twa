@@ -8,8 +8,9 @@ const router = Router();
 // POST /api/orders — создать заказ
 router.post('/', async (req, res) => {
   try {
-    const { items, userName, userPhone, userCity, promoCode } = req.body;
+    const { items, userName, userPhone, userCity, userAddress, userPostal, deliveryMethod, comment, promoCode } = req.body;
     const telegramUserId = req.telegramUser?.id || 0;
+    const tgUsername = req.telegramUser?.username || null;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: 'Cart is empty' });
@@ -73,7 +74,7 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const finalPrice = totalPrice - discount;
+    const finalPrice = Math.max(0, totalPrice - discount);
 
     // Создаём заказ
     const order = await prisma.order.create({
@@ -82,6 +83,11 @@ router.post('/', async (req, res) => {
         userName: userName || 'Гость',
         userPhone: userPhone || '',
         userCity: userCity || '',
+        userAddress: userAddress || '',
+        userPostal: userPostal || '',
+        deliveryMethod: deliveryMethod || 'CDEK',
+        comment: comment || '',
+        tgUsername: tgUsername,
         items: JSON.stringify(orderItems),
         totalPrice: finalPrice,
         promoCode: appliedPromoCode,
@@ -98,18 +104,24 @@ router.post('/', async (req, res) => {
         .map((item) => `  • ${item.name} × ${item.qty} = ${(item.price * item.qty / 100).toLocaleString('ru-RU')} ₽`)
         .join('\n');
 
+      const tgUserLink = tgUsername ? `[@${tgUsername}](https://t.me/${tgUsername})` : 'не указан';
+
       const message =
         `🔔 *Новый заказ #${order.id}*\n\n` +
-        `👤 ${userName || 'Гость'}\n` +
-        `📱 ${userPhone || 'не указан'}\n` +
-        `🏙 ${userCity || 'не указан'}\n\n` +
+        `👤 Клиент: ${userName || 'Гость'} (TG: ${tgUserLink})\n` +
+        `📱 Телефон: ${userPhone || 'не указан'}\n` +
+        `🚚 Способ доставки: ${deliveryMethod || 'не указан'}\n` +
+        `🏙 Город: ${userCity || 'не указан'}\n` +
+        `📍 Адрес: ${userAddress || 'не указан'}\n` +
+        `📮 Индекс: ${userPostal || 'не указан'}\n` +
+        (comment ? `💬 Комментарий: ${comment}\n\n` : '\n') +
         `📦 Товары:\n${itemsText}\n\n` +
         (discount > 0 ? `🏷 Промокод: ${appliedPromoCode} (-${(discount / 100).toLocaleString('ru-RU')} ₽)\n` : '') +
         `💰 *Итого: ${(finalPrice / 100).toLocaleString('ru-RU')} ₽*`;
 
       for (const adminId of adminIds) {
         if (adminId) {
-          await bot.telegram.sendMessage(adminId, message, { parse_mode: 'Markdown' });
+          await bot.telegram.sendMessage(adminId, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
         }
       }
     } catch (notifyError) {
@@ -145,13 +157,34 @@ router.get('/', async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    const parsed = orders.map((o) => ({
-      ...o,
-      telegramUserId: Number(o.telegramUserId),
-      items: JSON.parse(o.items),
-      totalPrice: o.totalPrice / 100,
-      discount: o.discount / 100,
-    }));
+    // Получаем все продукты для быстрого поиска картинок
+    const allProducts = await prisma.product.findMany({ select: { id: true, images: true } });
+    const productImagesMap = new Map<number, string>();
+    for (const p of allProducts) {
+      try {
+        const imgs = JSON.parse(p.images);
+        productImagesMap.set(p.id, imgs[0] || '');
+      } catch {
+        productImagesMap.set(p.id, '');
+      }
+    }
+
+    const parsed = orders.map((o) => {
+      const parsedItems = JSON.parse(o.items).map((item: any) => {
+        if (!item.image && productImagesMap.has(item.productId)) {
+          item.image = productImagesMap.get(item.productId);
+        }
+        return item;
+      });
+
+      return {
+        ...o,
+        telegramUserId: Number(o.telegramUserId),
+        items: parsedItems,
+        totalPrice: o.totalPrice / 100,
+        discount: o.discount / 100,
+      };
+    });
 
     res.json(parsed);
   } catch (error) {
