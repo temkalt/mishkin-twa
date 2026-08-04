@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import WebApp from '@twa-dev/sdk';
+import { getWebApp } from './utils/telegram';
 import { Splash } from './components/Splash';
 import { SubscriptionPopup } from './components/SubscriptionPopup';
 import { BottomNav } from './components/BottomNav';
@@ -22,13 +22,14 @@ function App() {
 
   useEffect(() => {
     // Initialize Telegram Web App
-    if (WebApp.initData) {
-      WebApp.ready();
-      WebApp.expand();
-      if (WebApp.requestFullscreen) {
-        WebApp.requestFullscreen();
+    const webApp = getWebApp();
+    if (webApp && webApp.initData) {
+      webApp.ready();
+      webApp.expand();
+      if (webApp.requestFullscreen) {
+        webApp.requestFullscreen();
       }
-      if (WebApp.colorScheme === 'dark') {
+      if (webApp.colorScheme === 'dark') {
         document.documentElement.classList.add('dark');
       }
     }

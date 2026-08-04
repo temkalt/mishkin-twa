@@ -1,4 +1,4 @@
-import WebApp from '@twa-dev/sdk';
+import { getWebApp } from './telegram';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -11,8 +11,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...(options.headers as Record<string, string> || {}),
   };
 
-  if (WebApp.initData) {
-    headers['X-Telegram-Init-Data'] = WebApp.initData;
+  const webApp = getWebApp();
+  if (webApp && webApp.initData) {
+    headers['X-Telegram-Init-Data'] = webApp.initData;
   }
 
   const response = await fetch(url, {

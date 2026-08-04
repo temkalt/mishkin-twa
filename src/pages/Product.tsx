@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import WebApp from '@twa-dev/sdk';
+import { WebApp } from '../utils/telegram';
 import { useProductStore } from '../store/useProductStore';
 import { useCartStore } from '../store/useCartStore';
 

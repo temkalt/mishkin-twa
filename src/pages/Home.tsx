@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import WebApp from '@twa-dev/sdk';
+import { getWebApp } from '../utils/telegram';
 import { useUserStore } from '../store/useUserStore';
 import { useProductStore } from '../store/useProductStore';
 
@@ -264,11 +264,18 @@ export function Home() {
       </motion.section>
 
       <div className="mt-8 text-center text-[10px] text-text-sub opacity-50 pb-4">
-        Debug Info: InitData = {WebApp.initData ? 'Yes' : 'No'} | 
-        User: {WebApp.initDataUnsafe?.user?.id || 'Unknown'} | 
-        Admin: {useUserStore.getState().isAdmin ? 'Yes' : 'No'} |
-        TG: {typeof (window as any).Telegram !== 'undefined' ? 'Exists' : 'Missing'} |
-        TG_Init: {(window as any).Telegram?.WebApp?.initData ? 'Yes' : 'No'}
+        {(() => {
+          const webApp = getWebApp();
+          return (
+            <>
+              Debug Info: InitData = {webApp?.initData ? 'Yes' : 'No'} | 
+              User: {(webApp?.initDataUnsafe as any)?.user?.id || 'Unknown'} | 
+              Admin: {useUserStore.getState().isAdmin ? 'Yes' : 'No'} |
+              TG: {typeof (window as any).Telegram !== 'undefined' ? 'Exists' : 'Missing'} |
+              TG_Init: {(window as any).Telegram?.WebApp?.initData ? 'Yes' : 'No'}
+            </>
+          );
+        })()}
       </div>
     </motion.div>
   );
