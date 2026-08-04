@@ -266,7 +266,9 @@ export function Home() {
       <div className="mt-8 text-center text-[10px] text-text-sub opacity-50 pb-4">
         Debug Info: InitData = {WebApp.initData ? 'Yes' : 'No'} | 
         User: {WebApp.initDataUnsafe?.user?.id || 'Unknown'} | 
-        Admin: {useUserStore.getState().isAdmin ? 'Yes' : 'No'}
+        Admin: {useUserStore.getState().isAdmin ? 'Yes' : 'No'} |
+        TG: {typeof (window as any).Telegram !== 'undefined' ? 'Exists' : 'Missing'} |
+        TG_Init: {(window as any).Telegram?.WebApp?.initData ? 'Yes' : 'No'}
       </div>
     </motion.div>
   );
