@@ -98,13 +98,14 @@ router.post('/', async (req, res) => {
 
     // Отправляем уведомление менеджеру в Telegram
     try {
-      const adminIds = (process.env.ADMIN_IDS || '').split(',').map((id) => parseInt(id.trim(), 10));
+      const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => parseInt(id.trim(), 10));
 
       const itemsText = orderItems
         .map((item) => `  • ${item.name} × ${item.qty} = ${(item.price * item.qty / 100).toLocaleString('ru-RU')} ₽`)
         .join('\n');
 
-      const tgUserLink = tgUsername ? `[@${tgUsername}](https://t.me/${tgUsername})` : 'не указан';
+      const tgUserId = req.telegramUser?.id || '';
+      const tgUserLink = tgUsername ? `[@${tgUsername}](https://t.me/${tgUsername})` : `[Профиль](tg://user?id=${tgUserId})`;
 
       const message =
         `🔔 *Новый заказ #${order.id}*\n\n` +
