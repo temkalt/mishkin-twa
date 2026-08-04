@@ -13,7 +13,12 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // --- Middleware ---
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', process.env.WEBAPP_URL || ''].filter(Boolean),
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://mishkin-twa.vercel.app',
+    process.env.WEBAPP_URL || '',
+  ].filter(Boolean),
   credentials: true,
 }));
 app.use(express.json());
