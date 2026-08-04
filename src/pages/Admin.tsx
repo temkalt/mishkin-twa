@@ -78,7 +78,7 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-red-50 text-red-500',
 };
 
-type Tab = 'stats' | 'orders' | 'products' | 'promo';
+type Tab = 'stats' | 'orders' | 'products' | 'promo' | 'broadcast';
 
 export function Admin() {
   const navigate = useNavigate();
@@ -97,6 +97,11 @@ export function Admin() {
   // Forms state
   const [showPromoForm, setShowPromoForm] = useState(false);
   const [promoForm, setPromoForm] = useState({ code: '', type: 'PERCENT', value: '', limit: '' });
+
+  // Broadcast state
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ total: number; successCount: number; failCount: number } | null>(null);
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [editProductId, setEditProductId] = useState<number | null>(null);
@@ -176,6 +181,33 @@ export function Admin() {
     }
   };
 
+  const handleDeleteProduct = async (id: number) => {
+    if (!confirm('Точно удалить товар?')) return;
+    try {
+      await api.delete(`/products/${id}`);
+      loadData();
+    } catch (err) {
+      alert('Ошибка удаления товара');
+    }
+  };
+
+  const handleBroadcast = async () => {
+    if (!broadcastMessage.trim()) return;
+    if (!confirm('Вы уверены, что хотите отправить это сообщение всем пользователям бота?')) return;
+    
+    setIsBroadcasting(true);
+    setBroadcastResult(null);
+    try {
+      const result = await api.post<{total: number, successCount: number, failCount: number}>('/users/broadcast', { message: broadcastMessage });
+      setBroadcastResult(result);
+      setBroadcastMessage('');
+    } catch (err) {
+      alert('Ошибка при рассылке');
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -247,23 +279,17 @@ export function Admin() {
 
         {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {([
-            { key: 'stats' as Tab, label: 'Стат.', icon: 'monitoring' },
-            { key: 'orders' as Tab, label: 'Заказы', icon: 'receipt_long' },
-            { key: 'products' as Tab, label: 'Товары', icon: 'inventory_2' },
-            { key: 'promo' as Tab, label: 'Промо', icon: 'percent' },
-          ]).map((t) => (
+          {['stats', 'orders', 'products', 'promo', 'broadcast'].map((t) => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all shrink-0 ${
-                tab === t.key
-                  ? 'bg-primary text-white shadow-md shadow-primary/20'
-                  : 'bg-pastel-ivory/80 text-text-sub'
+              key={t}
+              onClick={() => setTab(t as Tab)}
+              className={`flex-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
+                tab === t
+                  ? 'bg-primary text-white shadow-md'
+                  : 'text-text-sub hover:bg-pastel-sand/50'
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
-              {t.label}
+              {t === 'stats' ? 'Стата' : t === 'orders' ? 'Заказы' : t === 'products' ? 'Товары' : t === 'promo' ? 'Промо' : 'Рассылка'}
             </button>
           ))}
         </div>
@@ -536,6 +562,7 @@ export function Admin() {
                       {p.inStock ? 'В наличии' : 'Нет'}
                     </span>
                     <button onClick={() => openEditProduct(p)} className="text-[10px] font-bold text-primary uppercase mt-1">Редакт.</button>
+                    <button onClick={() => handleDeleteProduct(p.id)} className="text-[10px] font-bold text-red-400 uppercase">Удалить</button>
                   </div>
                 </motion.div>
               );
@@ -641,6 +668,73 @@ export function Admin() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ===== BROADCAST TAB ===== */}
+      {tab === 'broadcast' && (
+        <div className="px-4 pt-4">
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-pastel-sand/20">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-2xl text-primary">campaign</span>
+              <h3 className="font-display text-lg font-bold text-text-main">Рассылка</h3>
+            </div>
+            <p className="text-xs text-text-sub mb-4">Сообщение будет отправлено всем пользователям, которые запустили бота. Поддерживается *жирный*, _курсив_.</p>
+
+            <textarea
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+              rows={6}
+              placeholder="Введите текст сообщения..."
+              className="w-full rounded-xl bg-pastel-ivory/50 p-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none mb-4"
+            />
+
+            {broadcastResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4"
+              >
+                <p className="text-sm font-bold text-emerald-700 mb-1">✅ Рассылка завершена!</p>
+                <div className="grid grid-cols-3 gap-2 text-center mt-2">
+                  <div>
+                    <p className="text-xl font-bold text-text-main">{broadcastResult.total}</p>
+                    <p className="text-[10px] text-text-sub">Всего</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-emerald-600">{broadcastResult.successCount}</p>
+                    <p className="text-[10px] text-text-sub">Доставлено</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-red-500">{broadcastResult.failCount}</p>
+                    <p className="text-[10px] text-text-sub">Ошибок</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            <button
+              onClick={handleBroadcast}
+              disabled={isBroadcasting || !broadcastMessage.trim()}
+              className="w-full rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isBroadcasting ? (
+                <>
+                  <motion.span
+                    className="material-symbols-outlined text-[18px]"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  >progress_activity</motion.span>
+                  Отправка...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  Отправить всем
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
