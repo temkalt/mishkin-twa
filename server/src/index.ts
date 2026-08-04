@@ -52,7 +52,7 @@ app.get('/api/setup-webhook', async (req, res) => {
 });
 
 // --- Start Local Server ---
-if (process.env.NODE_ENV !== 'production') {
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`\n🚀 MISHKIN API server running locally on http://localhost:${PORT}`);
     console.log(`   Products API: http://localhost:${PORT}/api/products\n`);
