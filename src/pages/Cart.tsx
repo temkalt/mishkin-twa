@@ -127,7 +127,7 @@ export function Cart() {
         >
           <span className="material-symbols-outlined text-4xl text-primary">check_circle</span>
         </motion.div>
-        <h2 className="mb-2 font-bahnschrift text-2xl font-bold text-text-main">Заказ оформлен!</h2>
+        <h2 className="mb-2 font-display text-2xl font-bold text-text-main">Заказ оформлен!</h2>
         <p className="mb-1 text-text-sub">Заказ #{orderSuccess.id}</p>
         <p className="mb-6 text-lg font-bold text-text-main">{orderSuccess.totalPrice.toLocaleString('ru-RU')} ₽</p>
         {orderSuccess.discount > 0 && (
@@ -158,7 +158,7 @@ export function Cart() {
           <button onClick={() => setShowCheckout(false)} className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory transition-transform active:scale-90">
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="font-bahnschrift text-2xl font-bold text-text-main">Оформление</h1>
+          <h1 className="font-display text-2xl font-bold text-text-main">Оформление</h1>
         </header>
 
         <div className="flex flex-col gap-4">
@@ -237,7 +237,7 @@ export function Cart() {
         <button onClick={() => navigate(-1)} className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory transition-transform active:scale-90">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h1 className="font-bahnschrift text-2xl font-bold text-text-main">Корзина</h1>
+        <h1 className="font-display text-2xl font-bold text-text-main">Корзина</h1>
       </header>
 
       <div className="flex flex-col gap-4">
@@ -296,7 +296,7 @@ export function Cart() {
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <span className="material-symbols-outlined text-6xl text-pastel-sand mb-4">shopping_bag</span>
-            <h3 className="font-bahnschrift text-xl font-bold text-text-main mb-2">Корзина пуста</h3>
+            <h3 className="font-display text-xl font-bold text-text-main mb-2">Корзина пуста</h3>
             <p className="text-text-sub mb-6">Добавьте свечи из каталога, чтобы наполнить её светом.</p>
             <button
               onClick={() => navigate('/catalog')}

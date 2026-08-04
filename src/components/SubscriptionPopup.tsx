@@ -60,7 +60,7 @@ export function SubscriptionPopup() {
               <span className="material-symbols-outlined text-[24px]">notifications_active</span>
             </div>
             
-            <h3 className="mb-2 font-bahnschrift text-xl font-bold text-text-main">
+            <h3 className="mb-2 font-display text-xl font-bold text-text-main">
               Присоединяйтесь к клубу
             </h3>
             <p className="mb-6 text-sm leading-relaxed text-text-sub">
