@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { getWebApp } from '../utils/telegram';
-import { useUserStore } from '../store/useUserStore';
 import { useProductStore } from '../store/useProductStore';
 
 const fadeUp = {
