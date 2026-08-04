@@ -90,6 +90,7 @@ export function Admin() {
   const [promos, setPromos] = useState<PromoCode[]>([]);
   
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
@@ -110,6 +111,7 @@ export function Admin() {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       if (tab === 'stats') {
         const data = await api.get<Stats>('/users/stats');
@@ -124,8 +126,9 @@ export function Admin() {
         const data = await api.get<PromoCode[]>('/promo');
         setPromos(data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Admin load error:', err);
+      setLoadError(err?.message || 'Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }
@@ -271,6 +274,13 @@ export function Admin() {
         <div className="px-4 pt-4">
           {loading ? (
             <div className="animate-pulse h-32 bg-white rounded-2xl" />
+          ) : loadError ? (
+            <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-center">
+              <span className="material-symbols-outlined text-3xl text-red-400 mb-2 block">error</span>
+              <p className="text-sm font-bold text-red-600 mb-1">Ошибка загрузки</p>
+              <p className="text-xs text-red-500 mb-3">{loadError}</p>
+              <button onClick={loadData} className="text-xs font-bold text-primary underline">Повторить</button>
+            </div>
           ) : stats ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-pastel-sand/20 flex flex-col items-center text-center">
@@ -294,7 +304,12 @@ export function Admin() {
                 <span className="text-[10px] text-text-sub uppercase tracking-wider mt-1">Новых заказов</span>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-2xl bg-pastel-ivory p-6 text-center">
+              <span className="material-symbols-outlined text-4xl text-text-sub mb-2 block">monitoring</span>
+              <p className="text-sm text-text-sub">Нет данных статистики</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -308,8 +323,20 @@ export function Admin() {
             <span className="material-symbols-outlined text-[18px]">add</span> Создать промокод
           </button>
           
+          {loadError && (
+            <div className="rounded-2xl bg-red-50 border border-red-200 p-3 mb-3 text-center">
+              <p className="text-xs text-red-600">{loadError}</p>
+              <button onClick={loadData} className="text-xs font-bold text-primary underline mt-1">Повторить</button>
+            </div>
+          )}
+          
           <div className="flex flex-col gap-3">
-            {loading ? <div className="animate-pulse h-20 bg-white rounded-2xl" /> : promos.map((p) => (
+            {loading ? <div className="animate-pulse h-20 bg-white rounded-2xl" /> : promos.length === 0 ? (
+              <div className="rounded-2xl bg-pastel-ivory p-6 text-center">
+                <span className="material-symbols-outlined text-4xl text-text-sub mb-2 block">percent</span>
+                <p className="text-sm text-text-sub">Промокодов пока нет</p>
+              </div>
+            ) : promos.map((p) => (
               <div key={p.id} className={`rounded-2xl p-4 shadow-sm border border-pastel-sand/20 ${p.isActive ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="font-display font-bold text-lg text-text-main tracking-wider">{p.code}</h4>
@@ -440,10 +467,10 @@ export function Admin() {
 
                     <div className="flex items-center justify-between border-t border-pastel-sand/30 pt-2 mb-3">
                       {order.discount > 0 && (
-                        <span className="text-xs text-primary">Скидка: −{(order.discount / 100).toLocaleString('ru-RU')} ₽</span>
+                        <span className="text-xs text-primary">Скидка: −{order.discount.toLocaleString('ru-RU')} ₽</span>
                       )}
                       <span className="ml-auto text-sm font-bold text-text-main">
-                        {(order.totalPrice / 100).toLocaleString('ru-RU')} ₽
+                        {order.totalPrice.toLocaleString('ru-RU')} ₽
                       </span>
                     </div>
 
