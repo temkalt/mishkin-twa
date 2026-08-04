@@ -71,6 +71,11 @@ export function Product() {
 
   const handleAdd = () => {
     if (!currentProduct) return;
+    
+    if (WebApp.initData) {
+      WebApp.HapticFeedback.impactOccurred('medium');
+    }
+
     addItem({
       productId: currentProduct.id,
       name: currentProduct.name,
