@@ -51,6 +51,21 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint — shows what the server sees about the current user
+app.get('/api/debug-auth', (req, res) => {
+  const adminIdsRaw = process.env.ADMIN_IDS || '';
+  const adminIds = adminIdsRaw.replace(/["']/g, '').split(',').map((id) => id.trim());
+  const telegramUser = req.telegramUser;
+  const userId = telegramUser?.id?.toString() || 'NOT SET';
+  res.json({
+    telegramUser: telegramUser || null,
+    userId,
+    adminIdsRaw,
+    adminIds,
+    isAdmin: adminIds.includes(userId),
+  });
+});
+
 
 
 // --- Start Local Server ---

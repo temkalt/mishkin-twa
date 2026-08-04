@@ -67,12 +67,12 @@ export function validateTelegram(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 5. Check auth_date (not older than 1 hour)
+    // 5. Check auth_date (not older than 24 hours)
     const authDate = urlParams.get('auth_date');
     if (authDate) {
       const authTimestamp = parseInt(authDate, 10);
       const now = Math.floor(Date.now() / 1000);
-      if (now - authTimestamp > 3600) {
+      if (now - authTimestamp > 86400) {
         res.status(401).json({ error: 'Init data expired' });
         return;
       }
