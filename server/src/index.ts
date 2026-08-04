@@ -37,12 +37,28 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// --- Start ---
-app.listen(PORT, () => {
-  console.log(`\n🚀 MISHKIN API server running on http://localhost:${PORT}`);
-  console.log(`   Health check: http://localhost:${PORT}/health`);
-  console.log(`   Products API: http://localhost:${PORT}/api/products\n`);
+// Vercel webhook endpoint
+app.use(bot.webhookCallback('/api/webhook'));
+
+// Setup webhook route (visit once after deployment)
+app.get('/api/setup-webhook', async (req, res) => {
+  try {
+    const url = `https://${req.headers.host}/api/webhook`;
+    await bot.telegram.setWebhook(url);
+    res.send(`Webhook successfully set to: ${url}`);
+  } catch (e) {
+    res.status(500).send(String(e));
+  }
 });
 
-// Launch Telegram bot
-launchBot();
+// --- Start Local Server ---
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 MISHKIN API server running locally on http://localhost:${PORT}`);
+    console.log(`   Products API: http://localhost:${PORT}/api/products\n`);
+  });
+  launchBot();
+}
+
+// Export for Vercel Serverless
+export default app;
