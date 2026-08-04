@@ -262,6 +262,12 @@ export function Home() {
           ))}
         </div>
       </motion.section>
+
+      <div className="mt-8 text-center text-[10px] text-text-sub opacity-50 pb-4">
+        Debug Info: InitData = {WebApp.initData ? 'Yes' : 'No'} | 
+        User: {WebApp.initDataUnsafe?.user?.id || 'Unknown'} | 
+        Admin: {useUserStore.getState().isAdmin ? 'Yes' : 'No'}
+      </div>
     </motion.div>
   );
 }
