@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useProductStore } from '../store/useProductStore';
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0 },
+  hidden: { opacity: 0, y: 50, scale: 0.95 },
+  visible: { opacity: 1, y: 0, scale: 1 },
 };
 
 function SkeletonCard() {
@@ -63,7 +63,7 @@ export function Home() {
         variants={fadeUp}
         initial="hidden"
         animate="visible"
-        transition={{ delay: 0.1, type: 'spring', damping: 25 }}
+        transition={{ delay: 0.15, type: 'spring', stiffness: 200, damping: 20 }}
       >
         <div
           className="relative h-[280px] w-full overflow-hidden rounded-3xl cursor-pointer"
@@ -100,7 +100,7 @@ export function Home() {
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: '-40px' }}
-        transition={{ delay: 0.15, type: 'spring', damping: 25 }}
+        transition={{ delay: 0.2, type: 'spring', stiffness: 200, damping: 20 }}
       >
         <div className="mb-4 flex items-center justify-between px-5">
           <h3 className="font-display text-lg font-bold text-text-main">Популярные ароматы</h3>
@@ -120,10 +120,11 @@ export function Home() {
                   key={product.id}
                   className="min-w-[155px] max-w-[155px] flex-shrink-0 flex flex-col gap-2 cursor-pointer"
                   onClick={() => navigate(`/product/${product.id}`)}
-                  initial={{ opacity: 0, x: 30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.08, type: 'spring', damping: 20 }}
-                  whileTap={{ scale: 0.96 }}
+                  initial={{ opacity: 0, x: 50, scale: 0.9 }}
+                  whileInView={{ opacity: 1, x: 0, scale: 1 }}
+                  viewport={{ once: true, margin: '-20px' }}
+                  transition={{ delay: idx * 0.1, type: 'spring', stiffness: 250, damping: 22 }}
+                  whileTap={{ scale: 0.92 }}
                 >
                   <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
                     <img
@@ -157,7 +158,7 @@ export function Home() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: '-40px' }}
-          transition={{ delay: 0.1, type: 'spring', damping: 25 }}
+          transition={{ delay: 0.15, type: 'spring', stiffness: 180, damping: 22 }}
         >
           <div className="mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-accent text-[18px]">diamond</span>
@@ -170,11 +171,11 @@ export function Home() {
                 key={p.id}
                 className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-pastel-ivory to-pastel-sand/30 p-3 cursor-pointer overflow-hidden"
                 onClick={() => navigate(`/product/${p.id}`)}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1, type: 'spring', damping: 20 }}
-                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0, x: -40, scale: 0.95 }}
+                whileInView={{ opacity: 1, x: 0, scale: 1 }}
+                viewport={{ once: true, margin: '-20px' }}
+                transition={{ delay: idx * 0.12, type: 'spring', stiffness: 200, damping: 20 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <div className="size-20 flex-shrink-0 overflow-hidden rounded-xl">
                   <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />

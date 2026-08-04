@@ -1,7 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const WEBAPP_URL = process.env.WEBAPP_URL || 'https://your-app.ngrok-free.app';
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://mishkin-twa.vercel.app';
 
 if (!BOT_TOKEN) {
   console.error('CRITICAL: BOT_TOKEN is missing!');
