@@ -23,20 +23,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Telegram initData validation for all /api routes
-app.use('/api', validateTelegram);
-
-// --- Routes ---
-app.use('/api/products', productsRouter);
-app.use('/api/orders', ordersRouter);
-app.use('/api/promo', promoRouter);
-app.use('/api/users', usersRouter);
-
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 // Vercel webhook endpoint
 app.use(bot.webhookCallback('/api/webhook'));
 
@@ -50,6 +36,22 @@ app.get('/api/setup-webhook', async (req, res) => {
     res.status(500).send(String(e));
   }
 });
+
+// Telegram initData validation for all REST API routes
+app.use('/api', validateTelegram);
+
+// --- Routes ---
+app.use('/api/products', productsRouter);
+app.use('/api/orders', ordersRouter);
+app.use('/api/promo', promoRouter);
+app.use('/api/users', usersRouter);
+
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+
 
 // --- Start Local Server ---
 if (!process.env.VERCEL) {
