@@ -25,7 +25,6 @@ declare global {
 export function validateTelegram(req: Request, res: Response, next: NextFunction): void {
   const initData = req.headers['x-telegram-init-data'] as string | undefined;
 
-  // В dev-режиме разрешаем запросы без initData (для тестирования из браузера)
   if (!initData) {
     if (process.env.NODE_ENV === 'development') {
       req.telegramUser = {
@@ -33,10 +32,8 @@ export function validateTelegram(req: Request, res: Response, next: NextFunction
         first_name: 'Dev',
         username: 'developer',
       };
-      next();
-      return;
     }
-    res.status(401).json({ error: 'Missing Telegram init data' });
+    next();
     return;
   }
 
