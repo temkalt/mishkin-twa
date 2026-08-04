@@ -18,7 +18,7 @@ router.post('/', async (req, res) => {
 
     // Подсчитываем итоговую сумму, подтягивая цены из БД
     let totalPrice = 0;
-    const orderItems: Array<{ productId: number; name: string; price: number; qty: number }> = [];
+    const orderItems: Array<{ productId: number; name: string; price: number; qty: number; image?: string }> = [];
 
     for (const item of items) {
       const product = await prisma.product.findUnique({ where: { id: item.productId } });
