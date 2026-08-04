@@ -26,6 +26,13 @@ router.post('/', async (req, res) => {
         res.status(400).json({ error: `Product #${item.productId} not found` });
         return;
       }
+      
+      let img = '';
+      try {
+        const imgs = JSON.parse(product.images);
+        img = imgs[0] || '';
+      } catch { /* ignore */ }
+
       const lineTotal = product.price * item.qty;
       totalPrice += lineTotal;
       orderItems.push({
@@ -33,6 +40,7 @@ router.post('/', async (req, res) => {
         name: product.name,
         price: product.price,
         qty: item.qty,
+        image: img,
       });
     }
 

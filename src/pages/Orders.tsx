@@ -4,13 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 
 interface OrderItem {
-  id: number;
+  productId: number;
   qty: number;
   price: number;
-  product: {
-    name: string;
-    images: string;
-  };
+  name: string;
+  image?: string;
 }
 
 interface Order {
@@ -116,20 +114,21 @@ export function Orders() {
 
                 {/* Items preview */}
                 <div className="flex gap-2 mb-3 overflow-hidden">
-                  {order.items.slice(0, 3).map((item) => {
-                    let img = '';
-                    try {
-                      const imgs = JSON.parse(item.product.images);
-                      img = imgs[0] || '';
-                    } catch {
-                      img = '';
-                    }
+                  {order.items.slice(0, 3).map((item, i) => {
+                    const img = item.image || '';
                     return (
-                      <div key={item.id} className="size-12 flex-shrink-0 rounded-lg bg-pastel-sand/30 overflow-hidden">
+                      <div key={item.productId || i} className="size-12 flex-shrink-0 rounded-lg bg-pastel-sand/30 overflow-hidden relative">
                         {img ? (
                           <img src={img} alt="" className="h-full w-full object-cover" />
                         ) : (
-                          <div className="h-full w-full bg-pastel-ivory" />
+                          <div className="h-full w-full bg-pastel-ivory flex items-center justify-center">
+                            <span className="material-symbols-outlined text-text-sub text-opacity-40 text-[18px]">inventory_2</span>
+                          </div>
+                        )}
+                        {item.qty > 1 && (
+                          <span className="absolute bottom-0 right-0 bg-black/50 text-white text-[8px] font-bold px-1 rounded-tl">
+                            x{item.qty}
+                          </span>
                         )}
                       </div>
                     );
