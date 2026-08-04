@@ -263,20 +263,6 @@ export function Home() {
         </div>
       </motion.section>
 
-      <div className="mt-8 text-center text-[10px] text-text-sub opacity-50 pb-4">
-        {(() => {
-          const webApp = getWebApp();
-          return (
-            <>
-              Debug Info: InitData = {webApp?.initData ? 'Yes' : 'No'} | 
-              User: {(webApp?.initDataUnsafe as any)?.user?.id || 'Unknown'} | 
-              Admin: {useUserStore.getState().isAdmin ? 'Yes' : 'No'} |
-              TG: {typeof (window as any).Telegram !== 'undefined' ? 'Exists' : 'Missing'} |
-              TG_Init: {(window as any).Telegram?.WebApp?.initData ? 'Yes' : 'No'}
-            </>
-          );
-        })()}
-      </div>
     </motion.div>
   );
 }
