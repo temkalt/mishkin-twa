@@ -3,6 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
+import WebApp from '@twa-dev/sdk'
+
+try {
+  WebApp.ready();
+  WebApp.expand();
+} catch (e) {
+  console.warn('WebApp init failed', e);
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
