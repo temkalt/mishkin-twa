@@ -121,7 +121,7 @@ router.post('/', async (req, res) => {
 
       for (const adminId of adminIds) {
         if (adminId) {
-          await bot.telegram.sendMessage(adminId, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
+          await bot.telegram.sendMessage(adminId, message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
         }
       }
     } catch (notifyError) {
@@ -146,9 +146,9 @@ router.get('/', async (req, res) => {
   try {
     const telegramUserId = req.telegramUser?.id || 0;
     const adminIdsRaw = process.env.ADMIN_IDS || '';
-    const adminIds = adminIdsRaw.split(',').map((id) => parseInt(id.trim(), 10));
+    const adminIds = adminIdsRaw.split(',').map((id) => id.trim());
     
-    const isUserAdmin = adminIds.includes(telegramUserId);
+    const isUserAdmin = adminIds.includes(telegramUserId.toString());
 
     const orders = await prisma.order.findMany({
       where: isUserAdmin ? undefined : { telegramUserId: BigInt(telegramUserId) },

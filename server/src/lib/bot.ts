@@ -9,9 +9,33 @@ if (!BOT_TOKEN) {
 
 export const bot = new Telegraf(BOT_TOKEN || 'dummy_token');
 
+import { prisma } from './prisma.js';
+
 // /start command
 bot.start(async (ctx) => {
-  const firstName = ctx.from.first_name || 'друг';
+  const tgUser = ctx.from;
+  const firstName = tgUser.first_name || 'друг';
+
+  // Сохраняем/обновляем пользователя в базе для статистики
+  try {
+    await prisma.user.upsert({
+      where: { telegramId: BigInt(tgUser.id) },
+      update: {
+        firstName: tgUser.first_name,
+        lastName: tgUser.last_name || null,
+        username: tgUser.username || null,
+        lastVisit: new Date(),
+      },
+      create: {
+        telegramId: BigInt(tgUser.id),
+        firstName: tgUser.first_name,
+        lastName: tgUser.last_name || null,
+        username: tgUser.username || null,
+      }
+    });
+  } catch (err) {
+    console.error('Failed to save user on /start:', err);
+  }
 
   try {
     await ctx.setChatMenuButton({

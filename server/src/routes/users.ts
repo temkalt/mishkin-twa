@@ -31,8 +31,8 @@ router.post('/auth', async (req, res) => {
     });
 
     // Проверяем, является ли пользователь админом
-    const adminIds = (process.env.ADMIN_IDS || '').split(',').map((id) => parseInt(id.trim(), 10));
-    const userIsAdmin = adminIds.includes(tgUser.id);
+    const adminIds = (process.env.ADMIN_IDS || '').split(',').map((id) => id.trim());
+    const userIsAdmin = adminIds.includes(tgUser.id.toString());
 
     res.json({
       id: user.id,
