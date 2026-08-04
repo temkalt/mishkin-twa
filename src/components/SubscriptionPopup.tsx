@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const STORAGE_KEY = 'mishkin_subscribed';
+
 export function SubscriptionPopup() {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // Check if we already showed it
-    const hasSeenPopup = localStorage.getItem('mishkin_has_seen_sub_popup');
-    
-    if (!hasSeenPopup) {
-      // Delay showing the popup a bit after entering the app
+    // Only show if user has never clicked "Subscribe"
+    const hasSubscribed = localStorage.getItem(STORAGE_KEY);
+
+    if (!hasSubscribed) {
       const timer = setTimeout(() => {
         setIsOpen(true);
       }, 2000);
@@ -17,20 +18,23 @@ export function SubscriptionPopup() {
     }
   }, []);
 
-  const handleClose = () => {
+  const handleDismiss = () => {
+    // Just close for now — will show again on next visit
     setIsOpen(false);
-    localStorage.setItem('mishkin_has_seen_sub_popup', 'true');
   };
 
   const handleSubscribe = () => {
-    // Use Telegram Web App API to open link if available
+    // Mark as subscribed so we never show again
+    localStorage.setItem(STORAGE_KEY, 'true');
+    setIsOpen(false);
+
+    // Open channel link
     const tg = (window as any).Telegram?.WebApp;
     if (tg && tg.openTelegramLink) {
       tg.openTelegramLink('https://t.me/mishkin_candles');
     } else {
       window.open('https://t.me/mishkin_candles', '_blank');
     }
-    handleClose();
   };
 
   return (
@@ -50,7 +54,7 @@ export function SubscriptionPopup() {
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
             <button 
-              onClick={handleClose}
+              onClick={handleDismiss}
               className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full bg-pastel-sand/50 text-text-main transition-colors hover:bg-pastel-sand"
             >
               <span className="material-symbols-outlined text-[18px]">close</span>
@@ -75,7 +79,7 @@ export function SubscriptionPopup() {
                 Подписаться
               </button>
               <button 
-                onClick={handleClose}
+                onClick={handleDismiss}
                 className="w-full py-2 text-sm font-medium text-text-sub hover:text-text-main"
               >
                 Возможно, позже

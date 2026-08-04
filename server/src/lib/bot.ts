@@ -28,7 +28,8 @@ bot.start(async (ctx) => {
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        [Markup.button.webApp('🛍 Открыть магазин', WEBAPP_URL)]
+        [Markup.button.webApp('🛍 Открыть магазин', WEBAPP_URL)],
+        [Markup.button.url('📢 Наш канал', 'https://t.me/mishkin_candles')]
       ]),
     }
   );
