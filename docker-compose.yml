@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: mishkin_backend
+    env_file:
+      - ./server/.env
+    environment:
+      - DATABASE_URL=file:/app/prisma/data/dev.db
+      - PORT=3000
+    volumes:
+      - prisma_data:/app/prisma/data
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mishkin_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  prisma_data:

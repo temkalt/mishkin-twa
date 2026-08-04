@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @font-face {
+    font-family: 'Bahnschrift';
+    src: local('Bahnschrift'), local('Bahnschrift_Regular'), url('https://fonts.cdnfonts.com/s/20888/Bahnschrift.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+  
+  body {
+    font-family: 'Manrope', sans-serif;
+    background-color: theme('colors.background-light');
+    color: theme('colors.text-main');
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dark body {
+    background-color: theme('colors.background-dark');
+    color: theme('colors.pastel-ivory');
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
