@@ -6,7 +6,7 @@ import type { Request, Response, NextFunction } from 'express';
  */
 export function isAdmin(req: Request, res: Response, next: NextFunction): void {
   const adminIdsRaw = process.env.ADMIN_IDS || '';
-  const adminIds = adminIdsRaw.split(',').map((id) => id.trim());
+  const adminIds = adminIdsRaw.replace(/["']/g, '').split(',').map((id) => id.trim());
 
   const userId = req.telegramUser?.id?.toString();
 

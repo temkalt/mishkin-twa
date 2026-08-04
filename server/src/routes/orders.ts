@@ -146,7 +146,7 @@ router.get('/', async (req, res) => {
   try {
     const telegramUserId = req.telegramUser?.id || 0;
     const adminIdsRaw = process.env.ADMIN_IDS || '';
-    const adminIds = adminIdsRaw.split(',').map((id) => id.trim());
+    const adminIds = adminIdsRaw.replace(/["']/g, '').split(',').map((id) => id.trim());
     
     const isUserAdmin = adminIds.includes(telegramUserId.toString());
 
