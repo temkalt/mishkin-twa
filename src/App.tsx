@@ -4,10 +4,13 @@ import { AnimatePresence } from 'framer-motion';
 import WebApp from '@twa-dev/sdk';
 import { Splash } from './components/Splash';
 import { SubscriptionPopup } from './components/SubscriptionPopup';
+import { BottomNav } from './components/BottomNav';
 import { Home } from './pages/Home';
 import { Catalog } from './pages/Catalog';
 import { Product } from './pages/Product';
 import { Cart } from './pages/Cart';
+import { Orders } from './pages/Orders';
+import { Admin } from './pages/Admin';
 import { api } from './utils/api';
 import type { UserAuth } from './utils/types';
 
@@ -49,8 +52,11 @@ function App() {
               <Route path="/catalog" element={<Catalog />} />
               <Route path="/product/:id" element={<Product />} />
               <Route path="/cart" element={<Cart />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/admin" element={<Admin />} />
             </Routes>
           </AnimatePresence>
+          <BottomNav />
         </>
       )}
     </div>

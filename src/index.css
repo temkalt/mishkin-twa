@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,19 +12,32 @@
     font-style: normal;
     font-display: swap;
   }
-  
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     font-family: 'Manrope', sans-serif;
     background-color: theme('colors.background-light');
     color: theme('colors.text-main');
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
   }
 
   .dark body {
     background-color: theme('colors.background-dark');
     color: theme('colors.pastel-ivory');
+  }
+
+  img {
+    -webkit-user-drag: none;
+    user-select: none;
   }
 }
 
@@ -33,5 +48,9 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
