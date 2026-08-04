@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { validateTelegram } from './middleware/validateTelegram.js';
-import { launchBot } from './lib/bot.js';
+import { launchBot, bot } from './lib/bot.js';
 import productsRouter from './routes/products.js';
 import ordersRouter from './routes/orders.js';
 import promoRouter from './routes/promo.js';

@@ -87,7 +87,7 @@ router.post('/', isAdmin, async (req, res) => {
 // DELETE /api/promo/:id — деактивировать промокод (admin)
 router.delete('/:id', isAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     await prisma.promoCode.update({
       where: { id },
       data: { isActive: false },

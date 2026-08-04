@@ -56,7 +56,7 @@ router.get('/categories', async (_req, res) => {
 // GET /api/products/:id — один товар
 router.get('/:id', async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     const product = await prisma.product.findUnique({ where: { id } });
 
     if (!product) {
@@ -105,7 +105,7 @@ router.post('/', isAdmin, async (req, res) => {
 // PUT /api/products/:id — обновить товар (admin)
 router.put('/:id', isAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     const data: Record<string, unknown> = { ...req.body };
 
     // Конвертируем цену если передана
@@ -131,7 +131,7 @@ router.put('/:id', isAdmin, async (req, res) => {
 // DELETE /api/products/:id — удалить (скрыть) товар (admin)
 router.delete('/:id', isAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     await prisma.product.update({
       where: { id },
       data: { inStock: false },

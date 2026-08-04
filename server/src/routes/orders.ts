@@ -146,7 +146,7 @@ router.get('/', isAdmin, async (_req, res) => {
 // PATCH /api/orders/:id/status — обновить статус (admin)
 router.patch('/:id/status', isAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     const { status } = req.body;
 
     const validStatuses = ['NEW', 'CONFIRMED', 'SHIPPED', 'DONE', 'CANCELLED'];
