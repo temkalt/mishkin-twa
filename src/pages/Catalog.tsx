@@ -1,20 +1,34 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Variants } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { WebApp } from '../utils/telegram';
 import { useProductStore } from '../store/useProductStore';
 import { useCartStore } from '../store/useCartStore';
 
+const staggerGrid: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.05 } },
+};
+
+const cardVariant: Variants = {
+  hidden: { opacity: 0, y: 20, scale: 0.96 },
+  visible: {
+    opacity: 1, y: 0, scale: 1,
+    transition: { type: 'spring' as const, stiffness: 240, damping: 24 },
+  },
+};
+
 function SkeletonGrid() {
   return (
     <>
       {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex flex-col gap-2 animate-pulse">
-          <div className="relative aspect-[3/4] w-full rounded-2xl bg-pastel-sand/40" />
-          <div className="px-1">
-            <div className="h-2 w-12 rounded bg-pastel-sand/40 mb-1" />
-            <div className="h-4 w-20 rounded bg-pastel-sand/50 mb-1" />
-            <div className="h-3 w-16 rounded bg-pastel-sand/30" />
+        <div key={i} className="flex flex-col gap-2">
+          <div className="skeleton aspect-[3/4] w-full rounded-2xl" />
+          <div className="px-1 flex flex-col gap-1.5">
+            <div className="skeleton h-2 w-12 rounded-lg" />
+            <div className="skeleton h-4 w-20 rounded-lg" />
+            <div className="skeleton h-3 w-16 rounded-lg" />
           </div>
         </div>
       ))}
@@ -37,6 +51,7 @@ export function Catalog() {
   }, [fetchCategories, fetchProducts]);
 
   const handleCategoryChange = (cat: string) => {
+    if (cat === activeCategory) return;
     setActiveCategory(cat);
     fetchProducts(cat);
   };
@@ -72,25 +87,27 @@ export function Catalog() {
       transition={{ duration: 0.2 }}
     >
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background-light/80 backdrop-blur-xl px-5 pt-5 pb-3">
+      <header className="sticky top-0 z-40 glass-nav px-5 pt-5 pb-3">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/')}
-              className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80 transition-all active:scale-90"
+            <motion.button
+              onClick={() => navigate(-1)}
+              className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80"
+              whileTap={{ scale: 0.85 }}
             >
               <span className="material-symbols-outlined text-text-main text-[20px]">arrow_back</span>
-            </button>
+            </motion.button>
             <h1 className="font-display text-xl font-bold text-text-main">Каталог</h1>
           </div>
-          <button
+          <motion.button
             onClick={() => setShowSearch(!showSearch)}
-            className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80 transition-all active:scale-90"
+            className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80"
+            whileTap={{ scale: 0.85 }}
           >
             <span className="material-symbols-outlined text-text-main text-[20px]">
               {showSearch ? 'close' : 'search'}
             </span>
-          </button>
+          </motion.button>
         </div>
 
         {/* Search */}
@@ -100,7 +117,7 @@ export function Catalog() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className="overflow-hidden"
             >
               <input
@@ -109,51 +126,73 @@ export function Catalog() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Поиск свечей..."
                 autoFocus
-                className="mb-3 w-full rounded-xl border border-pastel-sand/60 bg-pastel-ivory/50 px-4 py-3 text-sm text-text-main outline-none focus:border-primary/40 transition-colors placeholder:text-text-sub/50"
+                className="mb-3 w-full rounded-xl border border-pastel-sand/60 bg-pastel-ivory/50 px-4 py-3 text-sm text-text-main outline-none focus:border-primary/50 transition-colors placeholder:text-text-sub/50"
               />
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Filters */}
+        {/* Category Filters — with layoutId indicator */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryChange(cat)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                activeCategory === cat
-                  ? 'bg-primary text-white shadow-md shadow-primary/20'
-                  : 'bg-pastel-ivory/80 text-text-sub hover:bg-pastel-sand/50'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const isActive = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => handleCategoryChange(cat)}
+                className="relative whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-colors"
+                style={{ color: isActive ? '#fff' : '' }}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="category-pill"
+                    className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25"
+                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <span
+                  className={`relative z-10 transition-colors ${
+                    isActive ? 'text-white' : 'text-text-sub'
+                  }`}
+                >
+                  {cat}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </header>
 
       {/* Results count */}
       <div className="px-5 py-3">
         <p className="text-xs text-text-sub">
-          {filtered.length} {filtered.length === 1 ? 'товар' : filtered.length < 5 ? 'товара' : 'товаров'}
+          {filtered.length}{' '}
+          {filtered.length === 1
+            ? 'товар'
+            : filtered.length < 5
+            ? 'товара'
+            : 'товаров'}
         </p>
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-2 gap-3 px-4">
+      <motion.div
+        className="grid grid-cols-2 gap-3 px-4"
+        variants={staggerGrid}
+        initial="hidden"
+        animate="visible"
+        key={activeCategory + searchQuery}
+      >
         {isLoading ? (
           <SkeletonGrid />
         ) : (
-          filtered.map((p, index) => (
+          filtered.map((p) => (
             <motion.div
               key={p.id}
               className="flex flex-col gap-2 cursor-pointer"
               onClick={() => navigate(`/product/${p.id}`)}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04, type: 'spring', damping: 25 }}
-              whileTap={{ scale: 0.97 }}
+              variants={cardVariant}
+              whileTap={{ scale: 0.96 }}
             >
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
                 {p.images[0] ? (
@@ -161,7 +200,7 @@ export function Catalog() {
                     layoutId={`product-img-${p.id}`}
                     src={p.images[0]}
                     alt={p.name}
-                    className="h-full w-full object-cover transition-transform duration-500"
+                    className="h-full w-full object-cover"
                     loading="lazy"
                   />
                 ) : (
@@ -169,44 +208,71 @@ export function Catalog() {
                 )}
 
                 {/* Category tag */}
-                <span className="absolute top-2 left-2 rounded-full bg-white/70 backdrop-blur-md px-2 py-0.5 text-[9px] font-semibold text-text-main">
+                <span className="absolute top-2 left-2 rounded-full bg-white/75 backdrop-blur-md px-2 py-0.5 text-[9px] font-semibold text-text-main">
                   {p.category}
                 </span>
 
-                {/* Add to cart button */}
-                <motion.button
-                  className={`absolute bottom-2.5 right-2.5 flex size-9 items-center justify-center rounded-full shadow-lg transition-all ${
-                    addedId === p.id
-                      ? 'bg-primary text-white'
-                      : 'bg-white/80 backdrop-blur-md text-text-main hover:bg-white'
-                  }`}
-                  whileTap={{ scale: 0.8 }}
-                  onClick={(e) => handleAddToCart(e, p)}
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {addedId === p.id ? 'check' : 'add'}
-                  </span>
-                </motion.button>
+                {/* Add to cart button with pulse ring */}
+                <div className="absolute bottom-2.5 right-2.5">
+                  {addedId === p.id && (
+                    <motion.span
+                      className="absolute inset-0 rounded-full bg-primary"
+                      initial={{ scale: 1, opacity: 0.5 }}
+                      animate={{ scale: 2.2, opacity: 0 }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
+                  <motion.button
+                    className={`flex size-9 items-center justify-center rounded-full shadow-lg ${
+                      addedId === p.id
+                        ? 'bg-primary text-white'
+                        : 'bg-white/85 backdrop-blur-md text-text-main'
+                    }`}
+                    whileTap={{ scale: 0.8 }}
+                    onClick={(e) => handleAddToCart(e, p)}
+                  >
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={addedId === p.id ? 'check' : 'add'}
+                        className="material-symbols-outlined text-[18px]"
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.5, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        {addedId === p.id ? 'check' : 'add'}
+                      </motion.span>
+                    </AnimatePresence>
+                  </motion.button>
+                </div>
               </div>
+
               <div className="px-1">
                 <h4 className="text-sm font-bold text-text-main line-clamp-1">{p.name}</h4>
-                <p className="text-xs font-medium text-text-sub">
+                <p className="text-xs font-semibold text-primary">
                   {p.price.toLocaleString('ru-RU')} ₽
                 </p>
               </div>
             </motion.div>
           ))
         )}
-      </div>
+      </motion.div>
 
       {/* Empty state */}
-      {!isLoading && filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-          <span className="material-symbols-outlined text-5xl text-pastel-sand mb-3">search_off</span>
-          <h3 className="font-display text-lg font-bold text-text-main mb-1">Ничего не найдено</h3>
-          <p className="text-sm text-text-sub">Попробуйте другой запрос или категорию</p>
-        </div>
-      )}
+      <AnimatePresence>
+        {!isLoading && filtered.length === 0 && (
+          <motion.div
+            className="flex flex-col items-center justify-center py-16 text-center px-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <span className="material-symbols-outlined text-5xl text-pastel-sand mb-3">search_off</span>
+            <h3 className="font-display text-lg font-bold text-text-main mb-1">Ничего не найдено</h3>
+            <p className="text-sm text-text-sub">Попробуйте другой запрос или категорию</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

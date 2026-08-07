@@ -1,11 +1,13 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { getWebApp } from './utils/telegram';
 import { Splash } from './components/Splash';
 import { SubscriptionPopup } from './components/SubscriptionPopup';
 import { BottomNav } from './components/BottomNav';
 import { api } from './utils/api';
+import type { UserAuth } from './utils/types';
+import { useUserStore } from './store/useUserStore';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Catalog = lazy(() => import('./pages/Catalog').then(m => ({ default: m.Catalog })));
@@ -13,8 +15,29 @@ const Product = lazy(() => import('./pages/Product').then(m => ({ default: m.Pro
 const Cart = lazy(() => import('./pages/Cart').then(m => ({ default: m.Cart })));
 const Orders = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
-import type { UserAuth } from './utils/types';
-import { useUserStore } from './store/useUserStore';
+
+// Minimal inline fallback — avoids spinner flash between route changes
+function PageFallback() {
+  return (
+    <div className="min-h-screen bg-background-light flex items-end justify-center pb-32">
+      <motion.div
+        className="flex gap-1.5"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.15 }}
+      >
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="size-2 rounded-full bg-primary/40"
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
+          />
+        ))}
+      </motion.div>
+    </div>
+  );
+}
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -22,7 +45,6 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
-    // Initialize Telegram Web App
     const webApp = getWebApp();
     if (webApp && webApp.initData) {
       webApp.ready();
@@ -35,57 +57,63 @@ function App() {
       }
     }
 
-    // Authenticate user FIRST — so admin status is ready before UI renders
     api.post<UserAuth>('/users/auth', {}).then((data) => {
-      console.log('[Auth] Response:', JSON.stringify(data));
       if (data.isAdmin) {
-        console.log('[Auth] Admin granted for ID:', data.telegramId);
         useUserStore.getState().setAdmin(true);
       }
-    }).catch((err) => {
-      console.warn('[Auth] Failed:', err.message);
+    }).catch(() => {
+      // silent fail — user just won't have admin
     }).finally(() => {
       setAuthReady(true);
     });
   }, []);
 
+  // Telegram BackButton
   useEffect(() => {
-    if (getWebApp()?.initData) {
-      const webApp = getWebApp();
-      const handleBack = () => window.history.back();
-      
-      if (['/', '/catalog', '/cart', '/orders', '/admin'].includes(location.pathname)) {
-        webApp.BackButton.hide();
-        webApp.offEvent('backButtonClicked', handleBack);
-      } else {
-        webApp.BackButton.show();
-        webApp.onEvent('backButtonClicked', handleBack);
-      }
-      return () => {
-        webApp.offEvent('backButtonClicked', handleBack);
-      }
+    const webApp = getWebApp();
+    if (!webApp?.initData) return;
+
+    const topLevelRoutes = ['/', '/catalog', '/cart', '/orders', '/admin'];
+    const handleBack = () => window.history.back();
+
+    if (topLevelRoutes.includes(location.pathname)) {
+      webApp.BackButton.hide();
+    } else {
+      webApp.BackButton.show();
+      webApp.onEvent('backButtonClicked', handleBack);
     }
+    return () => {
+      webApp.offEvent('backButtonClicked', handleBack);
+    };
   }, [location.pathname]);
 
-  // Splash calls this when animation is done.
-  // We wait up to 3 extra seconds for auth, then proceed.
   const handleSplashComplete = () => {
     if (authReady) {
       setShowSplash(false);
       return;
     }
-    let waited = 0;
-    const interval = setInterval(() => {
-      waited += 100;
-      if (useUserStore.getState() !== null || waited >= 3000) {
-        clearInterval(interval);
+    // Wait for auth, max 2.5s
+    const timeout = setTimeout(() => setShowSplash(false), 2500);
+    const poll = setInterval(() => {
+      if (authReady) {
+        clearInterval(poll);
+        clearTimeout(timeout);
         setShowSplash(false);
       }
-    }, 100);
-    setTimeout(() => {
-      clearInterval(interval);
-      setShowSplash(false);
-    }, 3000);
+    }, 80);
+    return () => { clearInterval(poll); clearTimeout(timeout); };
+  };
+
+  // Determine slide direction for product pages
+  const isProductPage = location.pathname.startsWith('/product/');
+  const pageVariants = {
+    initial: isProductPage
+      ? { opacity: 0, y: 30 }
+      : { opacity: 0 },
+    animate: { opacity: 1, y: 0 },
+    exit: isProductPage
+      ? { opacity: 0, y: 20 }
+      : { opacity: 0 },
   };
 
   return (
@@ -99,22 +127,27 @@ function App() {
       {!showSplash && (
         <>
           <SubscriptionPopup />
-          <AnimatePresence mode="wait">
-            <Suspense fallback={
-              <div className="flex h-screen items-center justify-center bg-background-light dark:bg-background-dark">
-                <div className="size-10 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-              </div>
-            }>
-              <Routes location={location} key={location.pathname}>
-                <Route path="/" element={<Home />} />
-                <Route path="/catalog" element={<Catalog />} />
-                <Route path="/product/:id" element={<Product />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/admin" element={<Admin />} />
-              </Routes>
-            </Suspense>
-          </AnimatePresence>
+          <Suspense fallback={<PageFallback />}>
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+                key={location.pathname}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <Routes location={location}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/catalog" element={<Catalog />} />
+                  <Route path="/product/:id" element={<Product />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="/admin" element={<Admin />} />
+                </Routes>
+              </motion.div>
+            </AnimatePresence>
+          </Suspense>
           <BottomNav />
         </>
       )}

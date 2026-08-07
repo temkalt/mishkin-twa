@@ -53,4 +53,41 @@
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+  /* Shimmer skeleton base */
+  .skeleton {
+    @apply relative overflow-hidden bg-pastel-sand/40 rounded-2xl;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.55) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* Page transitions */
+  .page-slide-up {
+    animation: fadeInUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .tap-highlight {
+    transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .tap-highlight:active {
+    transform: scale(0.95);
+  }
+
+  /* Frosted glass nav */
+  .glass-nav {
+    background: rgba(253, 251, 247, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
 }

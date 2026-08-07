@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { WebApp } from '../utils/telegram';
-import { motion } from 'framer-motion';
 import { useCartStore } from '../store/useCartStore';
 import { useUserStore } from '../store/useUserStore';
 
@@ -17,18 +17,23 @@ export function BottomNav() {
   const navigate = useNavigate();
   const cartCount = useCartStore((s) => s.getItemCount());
   const isAdmin = useUserStore((s) => s.isAdmin);
-  
-  const tabs = ALL_TABS.filter(t => !t.adminOnly || isAdmin);
 
-  // Hide on product detail page
+  const tabs = ALL_TABS.filter((t) => !t.adminOnly || isAdmin);
+
+  // Hide on product detail and admin page
   if (location.pathname.startsWith('/product/') || location.pathname === '/admin') {
     return null;
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-bottom">
+    <motion.nav
+      className="fixed bottom-0 left-0 right-0 z-50 safe-bottom"
+      initial={{ y: 80, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.1 }}
+    >
       <div className="mx-auto max-w-lg">
-        <div className="mx-3 mb-3 flex items-center justify-around rounded-2xl bg-white/80 backdrop-blur-xl border border-white/20 px-2 py-2 shadow-[0_-4px_30px_rgba(0,0,0,0.08)]">
+        <div className="mx-3 mb-3 flex items-center justify-around rounded-2xl glass-nav border border-white/30 px-2 py-2 shadow-[0_-4px_30px_rgba(0,0,0,0.08)]">
           {tabs.map((tab) => {
             const isActive = location.pathname === tab.path;
             return (
@@ -38,8 +43,9 @@ export function BottomNav() {
                   if (WebApp.initData) WebApp.HapticFeedback.impactOccurred('light');
                   navigate(tab.path);
                 }}
-                className="relative flex flex-col items-center gap-0.5 px-4 py-1.5 transition-all"
+                className="relative flex flex-col items-center gap-0.5 px-4 py-1.5"
               >
+                {/* Active background pill */}
                 {isActive && (
                   <motion.div
                     layoutId="nav-indicator"
@@ -47,36 +53,51 @@ export function BottomNav() {
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
-                <span
-                  className={`material-symbols-outlined relative z-10 text-[22px] transition-colors ${
-                    isActive ? 'text-primary' : 'text-text-sub'
-                  }`}
-                  style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
-                >
-                  {tab.icon}
-                </span>
-                {tab.path === '/cart' && cartCount > 0 && (
+
+                {/* Icon */}
+                <div className="relative">
                   <motion.span
-                    className="absolute -right-0.5 top-0 z-20 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                    className={`material-symbols-outlined relative z-10 text-[22px] transition-colors ${
+                      isActive ? 'text-primary' : 'text-text-sub'
+                    }`}
+                    style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
+                    animate={{ scale: isActive ? 1.15 : 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   >
-                    {cartCount}
+                    {tab.icon}
                   </motion.span>
-                )}
-                <span
+
+                  {/* Cart badge */}
+                  {tab.path === '/cart' && cartCount > 0 && (
+                    <AnimatePresence>
+                      <motion.span
+                        key={cartCount}
+                        className="absolute -right-2 -top-1 z-20 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white"
+                        initial={{ scale: 0, rotate: -15 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        exit={{ scale: 0 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                      >
+                        {cartCount > 9 ? '9+' : cartCount}
+                      </motion.span>
+                    </AnimatePresence>
+                  )}
+                </div>
+
+                {/* Label */}
+                <motion.span
                   className={`relative z-10 text-[10px] font-medium transition-colors ${
                     isActive ? 'text-primary' : 'text-text-sub'
                   }`}
+                  animate={{ opacity: isActive ? 1 : 0.75 }}
                 >
                   {tab.label}
-                </span>
+                </motion.span>
               </button>
             );
           })}
         </div>
       </div>
-    </nav>
+    </motion.nav>
   );
 }
