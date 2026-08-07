@@ -57,6 +57,7 @@ export function Cart() {
       WebApp.onEvent('mainButtonClicked', handleCheckout);
       return () => {
         WebApp.offEvent('mainButtonClicked', handleCheckout);
+        WebApp.MainButton.hide();
       };
     }
   }, [items, finalTotal, showCheckout, orderSuccess]);
