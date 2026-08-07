@@ -157,7 +157,8 @@ export function Catalog() {
             >
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
                 {p.images[0] ? (
-                  <img
+                  <motion.img
+                    layoutId={`product-img-${p.id}`}
                     src={p.images[0]}
                     alt={p.name}
                     className="h-full w-full object-cover transition-transform duration-500"

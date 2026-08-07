@@ -16,6 +16,18 @@ router.post('/', async (req, res) => {
       res.status(400).json({ error: 'Cart is empty' });
       return;
     }
+    if (!userName || typeof userName !== 'string' || !userName.trim()) {
+      res.status(400).json({ error: 'User name is required' });
+      return;
+    }
+    if (!userPhone || typeof userPhone !== 'string' || !userPhone.trim()) {
+      res.status(400).json({ error: 'Phone number is required' });
+      return;
+    }
+    if (!deliveryMethod || typeof deliveryMethod !== 'string') {
+      res.status(400).json({ error: 'Delivery method is required' });
+      return;
+    }
 
     // Подсчитываем итоговую сумму, подтягивая цены из БД
     let totalPrice = 0;

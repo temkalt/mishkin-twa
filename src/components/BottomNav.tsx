@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { WebApp } from '../utils/telegram';
 import { motion } from 'framer-motion';
 import { useCartStore } from '../store/useCartStore';
 import { useUserStore } from '../store/useUserStore';
@@ -33,7 +34,10 @@ export function BottomNav() {
             return (
               <button
                 key={tab.path}
-                onClick={() => navigate(tab.path)}
+                onClick={() => {
+                  if (WebApp.initData) WebApp.HapticFeedback.impactOccurred('light');
+                  navigate(tab.path);
+                }}
                 className="relative flex flex-col items-center gap-0.5 px-4 py-1.5 transition-all"
               >
                 {isActive && (

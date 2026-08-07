@@ -70,6 +70,12 @@ app.get('/api/debug-auth', (req, res) => {
 
 
 
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[Global Error]', err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+});
+
 // --- Start Local Server ---
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {

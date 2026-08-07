@@ -71,7 +71,8 @@ export function Home() {
         >
           {heroProduct ? (
             <>
-              <img
+              <motion.img
+                layoutId={`product-img-${heroProduct.id}`}
                 src={heroProduct.images[0]}
                 alt={heroProduct.name}
                 className="h-full w-full object-cover"
@@ -127,7 +128,8 @@ export function Home() {
                 whileTap={{ scale: 0.92 }}
               >
                 <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
-                  <img
+                  <motion.img
+                    layoutId={`product-img-${product.id}`}
                     src={product.images[0]}
                     alt={product.name}
                     className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
@@ -178,7 +180,7 @@ export function Home() {
                 whileTap={{ scale: 0.95 }}
               >
                 <div className="size-20 flex-shrink-0 overflow-hidden rounded-xl">
-                  <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />
+                  <motion.img layoutId={`product-img-${p.id}`} src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-[9px] font-bold uppercase tracking-widest text-accent">
@@ -240,8 +242,6 @@ export function Home() {
       >
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: 'eco', title: '100% натуральный', desc: 'Соевый воск' },
-            { icon: 'local_fire_department', title: 'До 60 часов', desc: 'Время горения' },
             { icon: 'palette', title: 'Ручная работа', desc: 'Каждая уникальна' },
             { icon: 'local_shipping', title: 'Доставка', desc: 'По всей России' },
           ].map((item, i) => (

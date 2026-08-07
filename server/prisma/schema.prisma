@@ -17,6 +17,8 @@ model User {
   isAdmin    Boolean  @default(false)
   lastVisit  DateTime @default(now())
   createdAt  DateTime @default(now())
+
+  @@index([telegramId])
 }
 
 model Product {
@@ -34,6 +36,9 @@ model Product {
   isFeatured  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([isFeatured])
 }
 
 model PromoCode {
@@ -45,6 +50,8 @@ model PromoCode {
   usageLimit    Int      @default(0) // 0 = безлимит
   usageCount    Int      @default(0)
   createdAt     DateTime @default(now())
+
+  @@index([isActive])
 }
 
 model Order {
@@ -65,4 +72,7 @@ model Order {
   status         String   @default("NEW") // "NEW" | "CONFIRMED" | "SHIPPED" | "DONE" | "CANCELLED"
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([telegramUserId])
+  @@index([status])
 }

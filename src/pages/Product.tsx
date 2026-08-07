@@ -120,10 +120,11 @@ export function Product() {
       {/* Product Image */}
       <div className="relative h-[55vh] w-full bg-pastel-sand/30 overflow-hidden">
         {product.images[0] ? (
-          <motion.img
-            src={product.images[0]}
-            alt={product.name}
-            className="h-full w-full object-cover"
+            <motion.img
+              layoutId={`product-img-${product.id}`}
+              src={product.images[0]}
+              alt={product.name}
+              className="h-full w-full object-cover"
             initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.6 }}
@@ -151,63 +152,6 @@ export function Product() {
         <p className="mb-5 text-xl font-bold text-primary">{product.price.toLocaleString('ru-RU')} ₽</p>
 
         <p className="mb-6 text-sm leading-relaxed text-text-sub">{product.description}</p>
-
-        {/* Aroma notes */}
-        {(product.topNote || product.heartNote || product.baseNote) && (
-          <div className="mb-6">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-text-main">Ноты аромата</h3>
-            <div className="flex gap-2.5">
-              {product.topNote && (
-                <motion.div
-                  className="flex flex-1 flex-col items-center gap-1.5 rounded-2xl bg-pastel-ivory/60 p-3.5 text-center"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <span className="text-[10px] text-text-sub font-medium">Верхние</span>
-                  <span className="text-xs font-bold text-text-main">{product.topNote}</span>
-                </motion.div>
-              )}
-              {product.heartNote && (
-                <motion.div
-                  className="flex flex-1 flex-col items-center gap-1.5 rounded-2xl bg-pastel-ivory/60 p-3.5 text-center"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <span className="text-[10px] text-text-sub font-medium">Сердце</span>
-                  <span className="text-xs font-bold text-text-main">{product.heartNote}</span>
-                </motion.div>
-              )}
-              {product.baseNote && (
-                <motion.div
-                  className="flex flex-1 flex-col items-center gap-1.5 rounded-2xl bg-pastel-ivory/60 p-3.5 text-center"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <span className="text-[10px] text-text-sub font-medium">База</span>
-                  <span className="text-xs font-bold text-text-main">{product.baseNote}</span>
-                </motion.div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Specs */}
-        <div className="mb-6 grid grid-cols-3 gap-2.5">
-          {[
-            { icon: 'local_fire_department', label: 'Горение', val: '45–60 ч' },
-            { icon: 'straighten', label: 'Объём', val: '200 мл' },
-            { icon: 'eco', label: 'Воск', val: 'Соевый' },
-          ].map((spec) => (
-            <div key={spec.label} className="flex flex-col items-center gap-1 rounded-xl border border-pastel-sand/40 p-3 text-center">
-              <span className="material-symbols-outlined text-primary text-[18px]">{spec.icon}</span>
-              <span className="text-[10px] text-text-sub">{spec.label}</span>
-              <span className="text-xs font-bold text-text-main">{spec.val}</span>
-            </div>
-          ))}
-        </div>
 
         {/* Related products */}
         {related.length > 0 && (

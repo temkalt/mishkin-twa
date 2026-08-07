@@ -38,14 +38,7 @@ export function Splash({ onComplete }: SplashProps) {
           animate={{ width: '120px', opacity: 1 }}
           transition={{ delay: 0.5, duration: 0.8, ease: 'easeOut' }}
         />
-        <motion.span
-          className="text-[10px] tracking-[0.25em] text-text-sub uppercase font-medium"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9, duration: 0.5 }}
-        >
-          Ароматические свечи
-        </motion.span>
+
       </motion.div>
     </motion.div>
   );
