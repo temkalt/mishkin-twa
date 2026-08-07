@@ -7,6 +7,7 @@ import productsRouter from './routes/products.js';
 import ordersRouter from './routes/orders.js';
 import promoRouter from './routes/promo.js';
 import usersRouter from './routes/users.js';
+import channelRouter from './routes/channel.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -45,6 +46,7 @@ app.use('/api/products', productsRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/promo', promoRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/channel', channelRouter);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -116,37 +116,37 @@ export function Home() {
           {isLoading
             ? [1, 2, 3].map((i) => <SkeletonCard key={i} />)
             : bestsellers.map((product, idx) => (
-                <motion.div
-                  key={product.id}
-                  className="min-w-[155px] max-w-[155px] flex-shrink-0 flex flex-col gap-2 cursor-pointer"
-                  onClick={() => navigate(`/product/${product.id}`)}
-                  initial={{ opacity: 0, x: 50, scale: 0.9 }}
-                  whileInView={{ opacity: 1, x: 0, scale: 1 }}
-                  viewport={{ once: true, margin: '-20px' }}
-                  transition={{ delay: idx * 0.1, type: 'spring', stiffness: 250, damping: 22 }}
-                  whileTap={{ scale: 0.92 }}
-                >
-                  <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-                      loading="lazy"
-                    />
-                    {product.isFeatured && (
-                      <span className="absolute top-2 left-2 rounded-full bg-primary/90 px-2 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider">
-                        Hit
-                      </span>
-                    )}
-                  </div>
-                  <div className="px-0.5">
-                    <h4 className="text-sm font-bold text-text-main line-clamp-1">{product.name}</h4>
-                    <p className="text-xs font-medium text-text-sub">
-                      {product.price.toLocaleString('ru-RU')} ₽
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
+              <motion.div
+                key={product.id}
+                className="min-w-[155px] max-w-[155px] flex-shrink-0 flex flex-col gap-2 cursor-pointer"
+                onClick={() => navigate(`/product/${product.id}`)}
+                initial={{ opacity: 0, x: 50, scale: 0.9 }}
+                whileInView={{ opacity: 1, x: 0, scale: 1 }}
+                viewport={{ once: true, margin: '-20px' }}
+                transition={{ delay: idx * 0.1, type: 'spring', stiffness: 250, damping: 22 }}
+                whileTap={{ scale: 0.92 }}
+              >
+                <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                    loading="lazy"
+                  />
+                  {product.isFeatured && (
+                    <span className="absolute top-2 left-2 rounded-full bg-primary/90 px-2 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider">
+                      Hit
+                    </span>
+                  )}
+                </div>
+                <div className="px-0.5">
+                  <h4 className="text-sm font-bold text-text-main line-clamp-1">{product.name}</h4>
+                  <p className="text-xs font-medium text-text-sub">
+                    {product.price.toLocaleString('ru-RU')} ₽
+                  </p>
+                </div>
+              </motion.div>
+            ))}
         </div>
       </motion.section>
 

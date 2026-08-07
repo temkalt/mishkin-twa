@@ -78,7 +78,7 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-red-50 text-red-500',
 };
 
-type Tab = 'stats' | 'orders' | 'products' | 'promo' | 'broadcast';
+type Tab = 'stats' | 'orders' | 'products' | 'promo' | 'broadcast' | 'channel';
 
 export function Admin() {
   const navigate = useNavigate();
@@ -102,6 +102,12 @@ export function Admin() {
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; successCount: number; failCount: number } | null>(null);
+
+  // Channel Post state
+  const [channelPostForm, setChannelPostForm] = useState({ text: '', photoUrl: '', buttonText: '🛍 Открыть магазин', startParam: 'channel' });
+  const [isChannelPosting, setIsChannelPosting] = useState(false);
+  const [channelPostResult, setChannelPostResult] = useState<{ success: boolean; messageId: number; url: string } | null>(null);
+  const [channelPostError, setChannelPostError] = useState<string | null>(null);
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [editProductId, setEditProductId] = useState<number | null>(null);
@@ -208,6 +214,24 @@ export function Admin() {
     }
   };
 
+  const handleChannelPost = async () => {
+    if (!channelPostForm.text.trim() && !channelPostForm.photoUrl.trim()) return;
+    if (!confirm('Вы уверены, что хотите опубликовать пост в канале?')) return;
+    
+    setIsChannelPosting(true);
+    setChannelPostResult(null);
+    setChannelPostError(null);
+    try {
+      const result = await api.post<{success: boolean; messageId: number; url: string}>('/channel/post', channelPostForm);
+      setChannelPostResult(result);
+      setChannelPostForm({ text: '', photoUrl: '', buttonText: '🛍 Открыть магазин', startParam: 'channel' });
+    } catch (err: any) {
+      setChannelPostError(err?.message || 'Ошибка публикации');
+    } finally {
+      setIsChannelPosting(false);
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -279,17 +303,17 @@ export function Admin() {
 
         {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {['stats', 'orders', 'products', 'promo', 'broadcast'].map((t) => (
+          {['stats', 'orders', 'products', 'promo', 'broadcast', 'channel'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t as Tab)}
-              className={`flex-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
+              className={`flex-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all min-w-[70px] ${
                 tab === t
                   ? 'bg-primary text-white shadow-md'
                   : 'text-text-sub hover:bg-pastel-sand/50'
               }`}
             >
-              {t === 'stats' ? 'Стата' : t === 'orders' ? 'Заказы' : t === 'products' ? 'Товары' : t === 'promo' ? 'Промо' : 'Рассылка'}
+              {t === 'stats' ? 'Стата' : t === 'orders' ? 'Заказы' : t === 'products' ? 'Товары' : t === 'promo' ? 'Промо' : t === 'broadcast' ? 'Рассылка' : 'Канал'}
             </button>
           ))}
         </div>
@@ -729,6 +753,105 @@ export function Admin() {
                 <>
                   <span className="material-symbols-outlined text-[18px]">send</span>
                   Отправить всем
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CHANNEL POST TAB ===== */}
+      {tab === 'channel' && (
+        <div className="px-4 pt-4">
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-pastel-sand/20">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-2xl text-primary">send_to_mobile</span>
+              <h3 className="font-display text-lg font-bold text-text-main">Пост в канал</h3>
+            </div>
+            <p className="text-xs text-text-sub mb-4">Опубликуйте пост с кнопкой, которая сразу откроет Web App.</p>
+
+            <div className="flex flex-col gap-4 mb-4">
+              <div>
+                <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Текст поста</label>
+                <textarea
+                  value={channelPostForm.text}
+                  onChange={(e) => setChannelPostForm({...channelPostForm, text: e.target.value})}
+                  rows={4}
+                  placeholder="Текст вашего крутого поста..."
+                  className="w-full rounded-xl bg-pastel-ivory/50 p-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-text-sub uppercase mb-1 block">URL фото (опционально)</label>
+                <input
+                  value={channelPostForm.photoUrl}
+                  onChange={(e) => setChannelPostForm({...channelPostForm, photoUrl: e.target.value})}
+                  placeholder="https://..."
+                  className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Текст кнопки</label>
+                  <input
+                    value={channelPostForm.buttonText}
+                    onChange={(e) => setChannelPostForm({...channelPostForm, buttonText: e.target.value})}
+                    placeholder="Открыть магазин"
+                    className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Параметр startapp</label>
+                  <input
+                    value={channelPostForm.startParam}
+                    onChange={(e) => setChannelPostForm({...channelPostForm, startParam: e.target.value})}
+                    placeholder="channel"
+                    className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {channelPostError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-600">
+                {channelPostError}
+              </div>
+            )}
+
+            {channelPostResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4"
+              >
+                <p className="text-sm font-bold text-emerald-700 mb-2">✅ Пост успешно опубликован!</p>
+                <div className="text-xs text-text-main flex flex-col gap-1">
+                  <p>ID сообщения: <b>{channelPostResult.messageId}</b></p>
+                  <p>Ссылка в кнопке: <a href={channelPostResult.url} target="_blank" rel="noreferrer" className="text-blue-500 break-all">{channelPostResult.url}</a></p>
+                </div>
+              </motion.div>
+            )}
+
+            <button
+              onClick={handleChannelPost}
+              disabled={isChannelPosting || (!channelPostForm.text.trim() && !channelPostForm.photoUrl.trim())}
+              className="w-full rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isChannelPosting ? (
+                <>
+                  <motion.span
+                    className="material-symbols-outlined text-[18px]"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  >progress_activity</motion.span>
+                  Публикация...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  Опубликовать
                 </>
               )}
             </button>
