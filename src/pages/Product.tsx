@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { WebApp } from '../utils/telegram';
 import { useProductStore } from '../store/useProductStore';
 import { useCartStore } from '../store/useCartStore';
@@ -39,6 +39,8 @@ function SkeletonProduct() {
 
 export function Product() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const layoutIdPrefix = location.state?.layoutIdPrefix || 'product';
   const { id } = useParams();
   const { currentProduct, isLoading, fetchProduct, products, fetchProducts } = useProductStore();
   const addItem = useCartStore((s) => s.addItem);
@@ -142,7 +144,7 @@ export function Product() {
       <div className="relative h-[55vh] w-full bg-pastel-sand/30 overflow-hidden">
         {product.images[0] ? (
           <motion.img
-            layoutId={`product-img-${product.id}`}
+            layoutId={`${layoutIdPrefix}-${product.id}`}
             src={product.images[0]}
             alt={product.name}
             className="h-full w-full object-cover"

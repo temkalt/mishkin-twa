@@ -91,14 +91,14 @@ export function Home() {
       >
         <motion.div
           className="relative h-[280px] w-full overflow-hidden rounded-3xl cursor-pointer"
-          onClick={() => heroProduct && navigate(`/product/${heroProduct.id}`)}
+          onClick={() => heroProduct && navigate(`/product/${heroProduct.id}`, { state: { layoutIdPrefix: 'hero' } })}
           whileTap={{ scale: 0.985 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         >
           {heroProduct ? (
             <>
               <motion.img
-                layoutId={`product-img-${heroProduct.id}`}
+                layoutId={`hero-${heroProduct.id}`}
                 src={heroProduct.images[0]}
                 alt={heroProduct.name}
                 className="h-full w-full object-cover"
@@ -168,13 +168,13 @@ export function Home() {
                   <motion.div
                     key={product.id}
                     className="min-w-[155px] max-w-[155px] flex-shrink-0 flex flex-col gap-2 cursor-pointer"
-                    onClick={() => navigate(`/product/${product.id}`)}
+                    onClick={() => navigate(`/product/${product.id}`, { state: { layoutIdPrefix: 'bestseller' } })}
                     variants={fadeUp}
                     whileTap={{ scale: 0.93 }}
                   >
                     <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
                       <motion.img
-                        layoutId={`product-img-${product.id}`}
+                        layoutId={`bestseller-${product.id}`}
                         src={product.images[0]}
                         alt={product.name}
                         className="h-full w-full object-cover"
@@ -226,13 +226,13 @@ export function Home() {
               <motion.div
                 key={p.id}
                 className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-pastel-ivory to-pastel-sand/30 p-3 cursor-pointer overflow-hidden"
-                onClick={() => navigate(`/product/${p.id}`)}
+                onClick={() => navigate(`/product/${p.id}`, { state: { layoutIdPrefix: 'limited' } })}
                 variants={fadeUp}
                 whileTap={{ scale: 0.96 }}
               >
                 <div className="size-20 flex-shrink-0 overflow-hidden rounded-xl">
                   <motion.img
-                    layoutId={`product-img-${p.id}`}
+                    layoutId={`limited-${p.id}`}
                     src={p.images[0]}
                     alt={p.name}
                     className="h-full w-full object-cover"

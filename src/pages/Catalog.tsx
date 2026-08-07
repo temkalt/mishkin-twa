@@ -190,14 +190,14 @@ export function Catalog() {
             <motion.div
               key={p.id}
               className="flex flex-col gap-2 cursor-pointer"
-              onClick={() => navigate(`/product/${p.id}`)}
+              onClick={() => navigate(`/product/${p.id}`, { state: { layoutIdPrefix: 'catalog' } })}
               variants={cardVariant}
               whileTap={{ scale: 0.96 }}
             >
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
                 {p.images[0] ? (
                   <motion.img
-                    layoutId={`product-img-${p.id}`}
+                    layoutId={`catalog-${p.id}`}
                     src={p.images[0]}
                     alt={p.name}
                     className="h-full w-full object-cover"
