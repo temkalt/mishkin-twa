@@ -79,11 +79,6 @@ export function Product() {
   const related = products
     .filter((p) => p.id !== product.id && p.category === product.category)
     .slice(0, 4);
-  const notes = [
-    { label: 'Верхние ноты', value: product.topNote, icon: 'air' },
-    { label: 'Ноты сердца', value: product.heartNote, icon: 'favorite' },
-    { label: 'Базовые ноты', value: product.baseNote, icon: 'spa' },
-  ].filter((n) => n.value);
   const lineTotal = product.price * qty;
 
   return (
@@ -196,37 +191,6 @@ export function Product() {
         <motion.p className="mb-6 text-sm leading-relaxed text-text-sub" variants={fadeUp}>
           {product.description}
         </motion.p>
-
-        {/* Scent pyramid */}
-        {notes.length > 0 && (
-          <motion.div
-            className="mb-6 rounded-2xl bg-gradient-to-br from-pastel-ivory to-pastel-sand/40 p-4 shadow-soft"
-            variants={fadeUp}
-          >
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-text-main">
-              Пирамида аромата
-            </h3>
-            <div className="flex flex-col gap-3">
-              {notes.map((n, i) => (
-                <motion.div
-                  key={n.label}
-                  className="flex items-center gap-3"
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.25 + i * 0.12, ...spring.soft }}
-                >
-                  <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <span className="material-symbols-outlined text-[18px]">{n.icon}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-sub">{n.label}</p>
-                    <p className="text-sm font-bold text-text-main">{n.value}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        )}
 
         {/* Related products */}
         {related.length > 0 && (

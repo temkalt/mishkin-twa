@@ -52,10 +52,9 @@ function App() {
       if (webApp.requestFullscreen) {
         webApp.requestFullscreen();
       }
-      if (webApp.colorScheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      }
     }
+    // Always render in the light theme — dark mode is disabled by request.
+    document.documentElement.classList.remove('dark');
 
     api.post<UserAuth>('/users/auth', {}).then((data) => {
       if (data.isAdmin) {
