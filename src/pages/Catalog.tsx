@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { WebApp } from '../utils/telegram';
 import { useProductStore } from '../store/useProductStore';
 import { useCartStore } from '../store/useCartStore';
+import { haptic } from '../utils/haptics';
 
 const staggerGrid: Variants = {
   hidden: {},
@@ -52,15 +52,14 @@ export function Catalog() {
 
   const handleCategoryChange = (cat: string) => {
     if (cat === activeCategory) return;
+    haptic.select();
     setActiveCategory(cat);
     fetchProducts(cat);
   };
 
   const handleAddToCart = (e: React.MouseEvent, product: typeof products[0]) => {
     e.stopPropagation();
-    if (WebApp.initData) {
-      WebApp.HapticFeedback.impactOccurred('light');
-    }
+    haptic.addToCart();
     addItem({
       productId: product.id,
       name: product.name,
@@ -91,7 +90,7 @@ export function Catalog() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <motion.button
-              onClick={() => navigate(-1)}
+              onClick={() => { haptic.tap(); navigate(-1); }}
               className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80"
               whileTap={{ scale: 0.85 }}
             >
@@ -100,7 +99,7 @@ export function Catalog() {
             <h1 className="font-display text-xl font-bold text-text-main">Каталог</h1>
           </div>
           <motion.button
-            onClick={() => setShowSearch(!showSearch)}
+            onClick={() => { haptic.tap(); setShowSearch(!showSearch); }}
             className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80"
             whileTap={{ scale: 0.85 }}
           >
@@ -190,7 +189,7 @@ export function Catalog() {
             <motion.div
               key={p.id}
               className="flex flex-col gap-2 cursor-pointer"
-              onClick={() => navigate(`/product/${p.id}`, { state: { layoutIdPrefix: 'catalog' } })}
+              onClick={() => { haptic.tap(); navigate(`/product/${p.id}`, { state: { layoutIdPrefix: 'catalog' } }); }}
               variants={cardVariant}
               whileTap={{ scale: 0.96 }}
             >

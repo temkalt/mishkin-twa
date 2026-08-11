@@ -53,6 +53,28 @@ export default {
           "0%, 100%": { boxShadow: "0 0 8px 0px rgba(58,90,42,0.3)" },
           "50%": { boxShadow: "0 0 20px 4px rgba(58,90,42,0.5)" },
         },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        flame: {
+          "0%, 100%": { transform: "scale(1) translateY(0)", opacity: "0.85" },
+          "25%": { transform: "scale(1.06,0.96) translateY(-1px)", opacity: "1" },
+          "50%": { transform: "scale(0.96,1.05) translateY(1px)", opacity: "0.9" },
+          "75%": { transform: "scale(1.03,0.98) translateY(-1px)", opacity: "1" },
+        },
+        gradientPan: {
+          "0%, 100%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+        },
+        breathe: {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.5" },
+          "50%": { transform: "scale(1.12)", opacity: "0.85" },
+        },
+        sheen: {
+          "0%": { transform: "translateX(-120%) skewX(-18deg)" },
+          "100%": { transform: "translateX(220%) skewX(-18deg)" },
+        },
       },
       animation: {
         shimmer: "shimmer 1.8s ease-in-out infinite",
@@ -60,6 +82,18 @@ export default {
         scaleIn: "scaleIn 0.35s cubic-bezier(0.22,1,0.36,1) both",
         pulseRing: "pulseRing 0.6s ease-out forwards",
         glowPulse: "glowPulse 2s ease-in-out infinite",
+        float: "float 5s ease-in-out infinite",
+        flame: "flame 1.6s ease-in-out infinite",
+        gradientPan: "gradientPan 8s ease-in-out infinite",
+        breathe: "breathe 4s ease-in-out infinite",
+        sheen: "sheen 2.4s ease-in-out infinite",
+      },
+      boxShadow: {
+        soft: "0 4px 20px -6px rgba(44,40,36,0.12)",
+        lift: "0 12px 40px -12px rgba(44,40,36,0.22)",
+        glow: "0 0 24px -4px rgba(58,90,42,0.45)",
+        "glow-accent": "0 0 28px -4px rgba(212,163,115,0.5)",
+        inset: "inset 0 1px 0 0 rgba(255,255,255,0.4)",
       },
       transitionTimingFunction: {
         "spring": "cubic-bezier(0.22, 1, 0.36, 1)",

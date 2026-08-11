@@ -77,17 +77,84 @@
     animation: fadeInUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* Frosted glass nav */
+  .glass-nav {
+    background: rgba(253, 251, 247, 0.72);
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+  }
+  .dark .glass-nav {
+    background: rgba(28, 25, 23, 0.68);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  }
+
+  /* Gradient brand text */
+  .text-gradient {
+    background: linear-gradient(100deg, #3A5A2A 0%, #6b8c5a 45%, #D4A373 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Ambient mesh background — layered radial washes with a slow drift */
+  .mesh-bg {
+    background-color: theme('colors.background-light');
+    background-image:
+      radial-gradient(60% 45% at 15% 0%, rgba(58, 90, 42, 0.10) 0%, transparent 60%),
+      radial-gradient(50% 40% at 100% 10%, rgba(212, 163, 115, 0.14) 0%, transparent 55%),
+      radial-gradient(70% 60% at 50% 100%, rgba(235, 229, 217, 0.55) 0%, transparent 70%);
+    background-size: 180% 180%;
+    animation: gradientPan 14s ease-in-out infinite;
+  }
+  .dark .mesh-bg {
+    background-color: theme('colors.background-dark');
+    background-image:
+      radial-gradient(60% 45% at 15% 0%, rgba(107, 140, 90, 0.16) 0%, transparent 60%),
+      radial-gradient(50% 40% at 100% 10%, rgba(212, 163, 115, 0.12) 0%, transparent 55%);
+  }
+
+  /* Fine film grain overlay for a tactile, premium surface */
+  .grain::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Soft glow helpers */
+  .glow-primary { box-shadow: 0 0 24px -4px rgba(58, 90, 42, 0.45); }
+  .glow-accent { box-shadow: 0 0 28px -4px rgba(212, 163, 115, 0.5); }
+
+  /* Moving sheen highlight (place inside an overflow-hidden element) */
+  .sheen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    animation: sheen 2.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
   .tap-highlight {
     transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .tap-highlight:active {
     transform: scale(0.95);
   }
+}
 
-  /* Frosted glass nav */
-  .glass-nav {
-    background: rgba(253, 251, 247, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+/* Respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

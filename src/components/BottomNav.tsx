@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WebApp } from '../utils/telegram';
+import { haptic } from '../utils/haptics';
 import { useCartStore } from '../store/useCartStore';
 import { useUserStore } from '../store/useUserStore';
 
@@ -40,7 +40,8 @@ export function BottomNav() {
               <button
                 key={tab.path}
                 onClick={() => {
-                  if (WebApp.initData) WebApp.HapticFeedback.impactOccurred('light');
+                  if (isActive) return;
+                  haptic.select();
                   navigate(tab.path);
                 }}
                 className="relative flex flex-col items-center gap-0.5 px-4 py-1.5"
@@ -49,7 +50,7 @@ export function BottomNav() {
                 {isActive && (
                   <motion.div
                     layoutId="nav-indicator"
-                    className="absolute inset-0 rounded-xl bg-primary/10"
+                    className="absolute inset-0 rounded-xl bg-primary/10 shadow-glow"
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -61,8 +62,8 @@ export function BottomNav() {
                       isActive ? 'text-primary' : 'text-text-sub'
                     }`}
                     style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
-                    animate={{ scale: isActive ? 1.15 : 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    animate={{ scale: isActive ? [1, 1.3, 1.15] : 1, y: isActive ? [-3, 0] : 0 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                   >
                     {tab.icon}
                   </motion.span>

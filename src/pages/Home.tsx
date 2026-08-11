@@ -1,24 +1,10 @@
 import { useEffect } from 'react';
-import { motion } from 'framer-motion';
-import type { Variants } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useProductStore } from '../store/useProductStore';
-
-// Stagger container
-const staggerContainer: Variants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.07, delayChildren: 0.05 },
-  },
-};
-
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 24, scale: 0.97 },
-  visible: {
-    opacity: 1, y: 0, scale: 1,
-    transition: { type: 'spring' as const, stiffness: 220, damping: 22 },
-  },
-};
+import { haptic } from '../utils/haptics';
+import { Reveal } from '../components/Reveal';
+import { fadeUp, staggerContainer, spring, EASE_OUT } from '../utils/motion';
 
 function SkeletonCard() {
   return (
@@ -35,6 +21,9 @@ function SkeletonCard() {
 export function Home() {
   const navigate = useNavigate();
   const { featured, fetchFeatured, products, fetchProducts, isLoading } = useProductStore();
+  const { scrollY } = useScroll();
+  const heroTextY = useTransform(scrollY, [0, 320], [0, 70]);
+  const heroDim = useTransform(scrollY, [0, 260], [0, 0.4]);
 
   useEffect(() => {
     fetchFeatured();
@@ -47,7 +36,7 @@ export function Home() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light pb-28"
+      className="mesh-bg grain flex min-h-screen flex-col pb-28"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -58,24 +47,24 @@ export function Home() {
         className="sticky top-0 z-40 flex items-center justify-between px-5 py-4 glass-nav"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.05, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ delay: 0.05, duration: 0.4, ease: EASE_OUT }}
       >
         <div className="flex items-center gap-2.5">
           <motion.img
             src="/images/logo123.png"
             alt="Mishkin"
-            className="h-8 w-8 rounded-lg object-cover"
+            className="h-8 w-8 rounded-lg object-cover shadow-soft"
             initial={{ rotate: -15, scale: 0.5, opacity: 0 }}
             animate={{ rotate: 0, scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 280, damping: 18, delay: 0.1 }}
           />
-          <h1 className="font-display text-xl font-bold tracking-wide uppercase text-text-main">
+          <h1 className="text-gradient font-display text-xl font-bold uppercase tracking-wide">
             Mishkin
           </h1>
         </div>
         <motion.button
-          onClick={() => navigate('/catalog')}
-          className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80 transition-colors hover:bg-pastel-sand/60"
+          onClick={() => { haptic.press(); navigate('/catalog'); }}
+          className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80 transition-colors active:bg-pastel-sand/60"
           whileTap={{ scale: 0.85 }}
         >
           <span className="material-symbols-outlined text-text-main text-[20px]">search</span>
@@ -90,10 +79,14 @@ export function Home() {
         animate="visible"
       >
         <motion.div
-          className="relative h-[280px] w-full overflow-hidden rounded-3xl cursor-pointer"
-          onClick={() => heroProduct && navigate(`/product/${heroProduct.id}`, { state: { layoutIdPrefix: 'hero' } })}
+          className="group relative h-[300px] w-full overflow-hidden rounded-3xl cursor-pointer shadow-lift"
+          onClick={() => {
+            if (!heroProduct) return;
+            haptic.press();
+            navigate(`/product/${heroProduct.id}`, { state: { layoutIdPrefix: 'hero' } });
+          }}
           whileTap={{ scale: 0.985 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          transition={spring.snappy}
         >
           {heroProduct ? (
             <>
@@ -102,9 +95,15 @@ export function Home() {
                 src={heroProduct.images[0]}
                 alt={heroProduct.name}
                 className="h-full w-full object-cover"
+                animate={{ scale: [1.08, 1] }}
+                transition={{ duration: 6, ease: EASE_OUT }}
               />
+              {/* Scroll-reactive dimming + base gradient */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
-              <div className="absolute bottom-5 left-5 right-5 text-white">
+              <motion.div className="absolute inset-0 bg-black" style={{ opacity: heroDim }} />
+              <span className="sheen opacity-40" />
+
+              <motion.div className="absolute bottom-5 left-5 right-5 text-white" style={{ y: heroTextY }}>
                 <motion.span
                   className="mb-1.5 inline-block rounded-full bg-white/20 backdrop-blur-md px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
                   initial={{ opacity: 0, x: -10 }}
@@ -117,19 +116,19 @@ export function Home() {
                   className="font-display text-2xl font-bold leading-tight"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ delay: 0.42, ease: EASE_OUT }}
                 >
                   {heroProduct.name}
                 </motion.h2>
                 <motion.p
-                  className="mt-1 text-sm text-white/70"
+                  className="mt-1 text-sm text-white/80"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.52 }}
                 >
                   {heroProduct.price.toLocaleString('ru-RU')} ₽
                 </motion.p>
-              </div>
+              </motion.div>
             </>
           ) : (
             <div className="skeleton h-full w-full rounded-3xl" />
@@ -143,12 +142,12 @@ export function Home() {
           className="mb-4 flex items-center justify-between px-5"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ delay: 0.18, duration: 0.4, ease: EASE_OUT }}
         >
           <h3 className="font-display text-lg font-bold text-text-main">Популярные ароматы</h3>
           <button
-            onClick={() => navigate('/catalog')}
-            className="text-xs font-semibold text-primary uppercase tracking-wider"
+            onClick={() => { haptic.tap(); navigate('/catalog'); }}
+            className="text-xs font-semibold text-primary uppercase tracking-wider active:opacity-60"
           >
             Все →
           </button>
@@ -160,33 +159,35 @@ export function Home() {
             : (
               <motion.div
                 className="flex gap-3"
-                variants={staggerContainer}
+                variants={staggerContainer(0.07)}
                 initial="hidden"
                 animate="visible"
               >
                 {bestsellers.map((product) => (
                   <motion.div
                     key={product.id}
-                    className="min-w-[155px] max-w-[155px] flex-shrink-0 flex flex-col gap-2 cursor-pointer"
-                    onClick={() => navigate(`/product/${product.id}`, { state: { layoutIdPrefix: 'bestseller' } })}
+                    className="group min-w-[155px] max-w-[155px] flex-shrink-0 flex flex-col gap-2 cursor-pointer"
+                    onClick={() => {
+                      haptic.tap();
+                      navigate(`/product/${product.id}`, { state: { layoutIdPrefix: 'bestseller' } });
+                    }}
                     variants={fadeUp}
                     whileTap={{ scale: 0.93 }}
                   >
-                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30">
+                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-pastel-sand/30 shadow-soft">
                       <motion.img
                         layoutId={`bestseller-${product.id}`}
                         src={product.images[0]}
                         alt={product.name}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover transition-transform duration-500 group-active:scale-105"
                         loading="lazy"
                       />
                       {product.isFeatured && (
-                        <span className="absolute top-2 left-2 rounded-full bg-primary/90 px-2 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider">
+                        <span className="absolute top-2 left-2 rounded-full bg-primary/90 px-2 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider backdrop-blur-sm">
                           Hit
                         </span>
                       )}
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 rounded-2xl" />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/25 to-transparent" />
                     </div>
                     <div className="px-0.5">
                       <h4 className="text-sm font-bold text-text-main line-clamp-1">{product.name}</h4>
@@ -211,13 +212,13 @@ export function Home() {
           viewport={{ once: true, margin: '-40px' }}
         >
           <div className="mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-accent text-[18px]">diamond</span>
+            <span className="material-symbols-outlined text-accent text-[18px] animate-float">diamond</span>
             <h3 className="font-display text-lg font-bold text-text-main">Лимитированная коллекция</h3>
           </div>
 
           <motion.div
             className="flex flex-col gap-3"
-            variants={staggerContainer}
+            variants={staggerContainer(0.08)}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: '-30px' }}
@@ -225,8 +226,11 @@ export function Home() {
             {limited.map((p) => (
               <motion.div
                 key={p.id}
-                className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-pastel-ivory to-pastel-sand/30 p-3 cursor-pointer overflow-hidden"
-                onClick={() => navigate(`/product/${p.id}`, { state: { layoutIdPrefix: 'limited' } })}
+                className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-pastel-ivory to-pastel-sand/30 p-3 cursor-pointer shadow-soft"
+                onClick={() => {
+                  haptic.tap();
+                  navigate(`/product/${p.id}`, { state: { layoutIdPrefix: 'limited' } });
+                }}
                 variants={fadeUp}
                 whileTap={{ scale: 0.96 }}
               >
@@ -235,7 +239,7 @@ export function Home() {
                     layoutId={`limited-${p.id}`}
                     src={p.images[0]}
                     alt={p.name}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover transition-transform duration-500 group-active:scale-110"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -248,7 +252,7 @@ export function Home() {
                     {p.price.toLocaleString('ru-RU')} ₽
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-text-sub text-[18px]">
+                <span className="material-symbols-outlined text-text-sub text-[18px] transition-transform group-active:translate-x-1">
                   chevron_right
                 </span>
               </motion.div>
@@ -258,13 +262,7 @@ export function Home() {
       )}
 
       {/* ===== О НАС ===== */}
-      <motion.section
-        className="mx-4 mb-8 overflow-hidden rounded-3xl"
-        variants={fadeUp}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: '-40px' }}
-      >
+      <Reveal className="mx-4 mb-8 overflow-hidden rounded-3xl shadow-soft">
         <div className="relative h-48 w-full">
           <img
             src="/images/about_.jpg"
@@ -285,12 +283,12 @@ export function Home() {
             превращают ваш дом в место абсолютного покоя.
           </p>
         </div>
-      </motion.section>
+      </Reveal>
 
       {/* ===== ПРЕИМУЩЕСТВА ===== */}
       <motion.section
         className="mx-4 mb-8"
-        variants={staggerContainer}
+        variants={staggerContainer(0.08)}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: '-40px' }}
@@ -302,7 +300,7 @@ export function Home() {
           ].map((item) => (
             <motion.div
               key={item.title}
-              className="flex flex-col items-center gap-2 rounded-2xl bg-pastel-ivory/60 p-4 text-center"
+              className="flex flex-col items-center gap-2 rounded-2xl bg-pastel-ivory/60 p-4 text-center shadow-soft"
               variants={fadeUp}
             >
               <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
