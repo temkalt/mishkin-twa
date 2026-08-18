@@ -16,6 +16,8 @@ const productSchema = z.object({
   baseNote: z.string().trim().max(120).default(''),
   images: z.array(z.string().trim().max(500)).max(10).default([]),
   inStock: z.boolean().default(true),
+  /** Остаток в штуках. `null` — учёт не ведётся, товар всегда доступен. */
+  stock: z.number().int().min(0).max(1_000_000).nullable().default(null),
   isFeatured: z.boolean().default(false),
 });
 

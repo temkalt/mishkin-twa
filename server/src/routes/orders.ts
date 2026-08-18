@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../middleware/isAdmin.js';
 import { bot } from '../lib/bot.js';
 import { notifyOrderStatus } from '../lib/paymentService.js';
+import { isAvailable, releaseStockForOrder, reserveStock, type StockError } from '../lib/stock.js';
 import {
   DELIVERY_OPTIONS,
   FREE_DELIVERY_FROM,
@@ -93,9 +94,29 @@ router.post('/', async (req, res) => {
       res.status(400).json({ error: `Товар #${missing[0]} больше не доступен` });
       return;
     }
-    const unavailable = products.find((product) => !product.inStock);
+    const unavailable = products.find((product) => !isAvailable(product));
     if (unavailable) {
       res.status(409).json({ error: `«${unavailable.name}» закончился — уберите его из корзины` });
+      return;
+    }
+
+    // Сколько штук каждого товара просят: одна позиция может прийти дважды.
+    const qtyByProduct = new Map<number, number>();
+    for (const item of input.items) {
+      qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.qty);
+    }
+
+    // Заранее понятную нехватку отсекаем до транзакции — покупателю нужен не
+    // «не удалось создать заказ», а «осталось 2 шт.».
+    const short = products.find(
+      (product) => product.stock !== null && product.stock < (qtyByProduct.get(product.id) ?? 0),
+    );
+    if (short) {
+      res.status(409).json({
+        error: short.stock === 0
+          ? `«${short.name}» закончился — уберите его из корзины`
+          : `«${short.name}»: осталось ${short.stock} шт. — уменьшите количество`,
+      });
       return;
     }
 
@@ -115,9 +136,20 @@ router.post('/', async (req, res) => {
     const deliveryPrice = deliveryPriceFor(input.deliveryMethod, itemsTotal);
     const deliveryOption = findDeliveryOption(input.deliveryMethod)!;
 
-    // Промокод и заказ — в одной транзакции: счётчик использований не уедет
-    // при одновременных заказах, и заказ не создастся со «сгоревшей» скидкой.
+    // Промокод, остаток и заказ — в одной транзакции: счётчик использований не
+    // уедет при одновременных заказах, заказ не создастся со «сгоревшей»
+    // скидкой, а склад не уйдёт в минус, если последнюю свечу оформляют вдвоём.
     const { order, discount, appliedPromo } = await prisma.$transaction(async (tx) => {
+      const shortage = await reserveStock(
+        tx,
+        [...qtyByProduct].map(([productId, qty]) => {
+          const product = byId.get(productId)!;
+          return { productId, name: product.name, qty, stock: product.stock };
+        }),
+      );
+      // Откатываем всю транзакцию: списанные ранее позиции вернутся сами.
+      if (shortage) throw Object.assign(new Error('OUT_OF_STOCK'), { shortage });
+
       let discountValue = 0;
       let appliedCode: string | null = null;
 
@@ -182,6 +214,16 @@ router.post('/', async (req, res) => {
       paymentStatus: order.paymentStatus,
     });
   } catch (error) {
+    // Остаток разобрали, пока покупатель заполнял форму.
+    const shortage = (error as { shortage?: StockError })?.shortage;
+    if (shortage) {
+      res.status(409).json({
+        error: shortage.available > 0
+          ? `«${shortage.name}»: осталось ${shortage.available} шт. — уменьшите количество`
+          : `«${shortage.name}» только что закончился — уберите его из корзины`,
+      });
+      return;
+    }
     console.error('Error creating order:', error);
     res.status(500).json({ error: 'Не удалось создать заказ' });
   }
@@ -311,6 +353,14 @@ router.patch('/:id/status', isAdmin, async (req, res) => {
 
     // Клиент узнаёт о смене статуса сам, без звонка менеджера.
     void notifyOrderStatus(order.telegramUserId, order.id, order.status);
+
+    // Отменённый заказ отпускает товар обратно на склад. Обратный переход
+    // («Отменён» → любой другой) остаток не резервирует заново — админка такой
+    // кнопки не показывает, а тихо занимать склад из-под покупателей нельзя.
+    if (order.status === 'CANCELLED') {
+      const returned = await releaseStockForOrder(order.id);
+      if (returned) console.log(`[stock] заказ #${order.id} отменён — остаток возвращён на склад`);
+    }
 
     res.json({ id: order.id, status: order.status, trackNumber: order.trackNumber });
   } catch (error) {

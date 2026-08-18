@@ -6,6 +6,7 @@ import { useProductStore } from '../store/useProductStore';
 import { useCartStore } from '../store/useCartStore';
 import { haptic } from '../utils/haptics';
 import { Icon } from '../components/Icon';
+import { isAvailable, maxQty, stockHint } from '../utils/stock';
 import { spring, fadeUp, staggerContainer, EASE_OUT } from '../utils/motion';
 
 const money = (value: number) => value.toLocaleString('ru-RU');
@@ -57,6 +58,12 @@ export function Product() {
     if (isInTelegram()) WebApp.MainButton.hide();
   }, [id, fetchProduct, fetchProducts]);
 
+  // Остаток мог уменьшиться, пока страница была открыта: не даём остаться
+  // с количеством, которое сервер всё равно не примет.
+  useEffect(() => {
+    if (currentProduct) setQty((q) => Math.min(q, Math.max(1, maxQty(currentProduct))));
+  }, [currentProduct]);
+
   const handleAdd = () => {
     if (!currentProduct) return;
     haptic.addToCart();
@@ -67,7 +74,9 @@ export function Product() {
       price: currentProduct.price,
       image: currentProduct.images[0] || '',
     });
-    updateQty(currentProduct.id, prev + qty);
+    // Больше, чем есть на складе, в корзину не кладём — иначе нехватка вылезет
+    // только при оформлении.
+    updateQty(currentProduct.id, Math.min(prev + qty, maxQty(currentProduct)));
     setAdded(true);
     setTimeout(() => setAdded(false), 1600);
   };
@@ -121,6 +130,9 @@ export function Product() {
   const related = products.filter((p) => p.id !== product.id && p.category === product.category).slice(0, 4);
   const lineTotal = product.price * qty;
   const longDescription = product.description.length > 180;
+  const available = isAvailable(product);
+  const qtyLimit = maxQty(product);
+  const stockLabel = stockHint(product);
 
   return (
     <motion.div
@@ -203,7 +215,7 @@ export function Product() {
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background-light/90 via-transparent to-transparent" />
 
-        {!product.inStock && (
+        {!available && (
           <span className="absolute left-4 top-20 rounded-full bg-black/60 px-3 py-1 text-2xs font-bold uppercase tracking-wider text-white backdrop-blur-md">
             Нет в наличии
           </span>
@@ -246,9 +258,14 @@ export function Product() {
           {product.name}
         </motion.h1>
 
-        <motion.p className="mb-5 text-xl font-bold tabular-nums text-primary" variants={fadeUp}>
-          {money(product.price)} ₽
-        </motion.p>
+        <motion.div className="mb-5 flex items-center gap-2.5" variants={fadeUp}>
+          <p className="text-xl font-bold tabular-nums text-primary">{money(product.price)} ₽</p>
+          {stockLabel && available && (
+            <span className="chip bg-accent/15 text-accent-deep">
+              <Icon name="package" size={12} /> {stockLabel}
+            </span>
+          )}
+        </motion.div>
 
         <motion.div className="mb-6" variants={fadeUp}>
           <p
@@ -335,9 +352,10 @@ export function Product() {
             </button>
             <span className="w-6 text-center text-base font-bold tabular-nums text-text-main">{qty}</span>
             <button
-              onClick={() => { haptic.select(); setQty((q) => Math.min(99, q + 1)); }}
+              onClick={() => { haptic.select(); setQty((q) => Math.min(qtyLimit, q + 1)); }}
+              disabled={qty >= qtyLimit}
               aria-label="Увеличить количество"
-              className="flex size-9 items-center justify-center rounded-xl text-text-main transition-transform active:scale-90"
+              className="flex size-9 items-center justify-center rounded-xl text-text-main transition-transform active:scale-90 disabled:opacity-30"
             >
               <Icon name="add" size={18} />
             </button>
@@ -345,13 +363,13 @@ export function Product() {
 
           <motion.button
             onClick={handleAdd}
-            disabled={!product.inStock}
+            disabled={!available}
             whileTap={{ scale: 0.96 }}
             className={`relative flex-1 overflow-hidden rounded-2xl py-3.5 font-bold text-white shadow-lg transition-colors disabled:opacity-50 ${
               added ? 'bg-success shadow-success/25' : 'bg-primary shadow-glow'
             }`}
           >
-            {!added && product.inStock && <span className="sheen opacity-30" />}
+            {!added && available && <span className="sheen opacity-30" />}
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={added ? 'added' : 'add'}
@@ -361,7 +379,7 @@ export function Product() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.18, ease: EASE_OUT }}
               >
-                {!product.inStock ? (
+                {!available ? (
                   'Нет в наличии'
                 ) : added ? (
                   <>

@@ -11,6 +11,8 @@ export interface Product {
   baseNote: string;
   images: string[];
   inStock: boolean;
+  /** Остаток в штуках. `null` — учёт не ведётся, товар всегда доступен. */
+  stock: number | null;
   isFeatured: boolean;
 }
 

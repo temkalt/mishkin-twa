@@ -31,9 +31,14 @@ try {
     `SELECT column_name FROM information_schema.columns WHERE table_name = 'Order' ORDER BY column_name`,
   ).catch(() => []);
   const names = columns.map((c) => c.column_name);
-  const required = ['paymentStatus', 'paymentId', 'deliveryPrice', 'trackNumber', 'itemsTotal', 'consentAt'];
+  const required = ['paymentStatus', 'paymentId', 'deliveryPrice', 'trackNumber', 'itemsTotal', 'consentAt', 'stockReturnedAt'];
   const missing = required.filter((c) => !names.includes(c));
   console.log('колонок в Order:', names.length, missing.length ? `НЕ ХВАТАЕТ: ${missing.join(', ')}` : '— все нужные на месте');
+
+  const productColumns = await prisma.$queryRawUnsafe(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'Product'`,
+  ).catch(() => []);
+  console.log('склад (Product.stock):', productColumns.some((c) => c.column_name === 'stock') ? 'есть' : 'НЕТ');
 
   const paymentEvent = await prisma.$queryRawUnsafe(
     `SELECT to_regclass('"PaymentEvent"') IS NOT NULL AS present`,

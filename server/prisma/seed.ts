@@ -17,6 +17,7 @@ async function main() {
       heartNote: 'Лаванда',
       baseNote: 'Кедр',
       images: JSON.stringify(['/images/candle_1.jpg']),
+      stock: 12,
       inStock: true,
       isFeatured: true,
     },
@@ -30,6 +31,7 @@ async function main() {
       heartNote: 'Ваниль',
       baseNote: 'Мускус',
       images: JSON.stringify(['/images/candle_2.jpg']),
+      stock: 8,
       inStock: true,
       isFeatured: true,
     },
@@ -43,6 +45,7 @@ async function main() {
       heartNote: 'Хвоя',
       baseNote: 'Мох',
       images: JSON.stringify(['/images/candle_3.jpg']),
+      stock: 10,
       inStock: true,
       isFeatured: false,
     },
@@ -56,6 +59,7 @@ async function main() {
       heartNote: 'Ледяная мята',
       baseNote: 'Кашемир',
       images: JSON.stringify(['/images/limit_1.jpg']),
+      stock: 3,
       inStock: true,
       isFeatured: true,
     },
@@ -69,6 +73,7 @@ async function main() {
       heartNote: 'Мёд',
       baseNote: 'Амбра',
       images: JSON.stringify(['/images/limit_2.jpg']),
+      stock: 2,
       inStock: true,
       isFeatured: true,
     },
@@ -82,15 +87,20 @@ async function main() {
       heartNote: 'Дамасская роза',
       baseNote: 'Амбра',
       images: JSON.stringify(['/images/limit_3.jpg']),
+      stock: 0,
       inStock: true,
       isFeatured: false,
     },
   ];
 
   for (const product of products) {
+    // Остаток — операционные данные заказчика: повторный сев обновляет описания
+    // и цены, но не затирает склад. При первом создании берём значение отсюда.
+    const { stock, ...withoutStock } = product;
+    void stock;
     await prisma.product.upsert({
       where: { slug: product.slug },
-      update: product,
+      update: withoutStock,
       create: product,
     });
   }

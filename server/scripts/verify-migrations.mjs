@@ -3,8 +3,8 @@
 // `public` не затрагивается.
 //
 // Проверяем два сценария:
-//   A. чистая база: init_pg → sync_orders_payments
-//   B. база после `db push`: init_pg + 5 колонок вручную → sync_orders_payments
+//   A. чистая база: init_pg → sync_orders_payments → product_stock
+//   B. база после `db push`: init_pg + 5 колонок вручную → те же миграции
 // Оба должны дать одинаковую структуру и не упасть.
 
 import 'dotenv/config';
@@ -12,8 +12,12 @@ import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 
 const SCHEMA = '_mishkin_verify';
-const INIT = 'prisma/migrations/20260804030602_init_pg/migration.sql';
-const SYNC = 'prisma/migrations/20260817234247_sync_orders_payments/migration.sql';
+const MIGRATIONS = [
+  'prisma/migrations/20260804030602_init_pg/migration.sql',
+  'prisma/migrations/20260817234247_sync_orders_payments/migration.sql',
+  'prisma/migrations/20260818021500_product_stock/migration.sql',
+];
+const [INIT, ...REST] = MIGRATIONS;
 
 const DRIFT = [
   `ALTER TABLE "Order" ADD COLUMN "userAddress" TEXT NOT NULL DEFAULT ''`,
@@ -26,9 +30,12 @@ const DRIFT = [
 const EXPECTED_ORDER_COLUMNS = [
   'id', 'telegramUserId', 'userName', 'userPhone', 'userCity', 'userAddress', 'userPostal',
   'deliveryMethod', 'deliveryPrice', 'trackNumber', 'comment', 'tgUsername', 'items',
-  'itemsTotal', 'totalPrice', 'promoCode', 'discount', 'status', 'paymentType',
+  'itemsTotal', 'totalPrice', 'promoCode', 'discount', 'status', 'stockReturnedAt', 'paymentType',
   'paymentStatus', 'paymentId', 'paymentMethod', 'paidAt', 'consentAt', 'createdAt', 'updatedAt',
 ];
+
+/** Колонки, без которых не работает склад. */
+const EXPECTED_PRODUCT_COLUMNS = ['stock'];
 
 /** Разбить файл миграции на отдельные операторы: Prisma не принимает несколько в одном запросе. */
 function statements(file) {
@@ -50,11 +57,17 @@ async function scenario(name, extra) {
 
     for (const sql of statements(INIT)) await tx.$executeRawUnsafe(sql);
     for (const sql of extra) await tx.$executeRawUnsafe(sql);
-    for (const sql of statements(SYNC)) await tx.$executeRawUnsafe(sql);
+    for (const file of REST) {
+      for (const sql of statements(file)) await tx.$executeRawUnsafe(sql);
+    }
 
     const columns = await tx.$queryRawUnsafe(
       `SELECT column_name FROM information_schema.columns
        WHERE table_schema = '${SCHEMA}' AND table_name = 'Order'`,
+    );
+    const productColumns = await tx.$queryRawUnsafe(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = '${SCHEMA}' AND table_name = 'Product'`,
     );
     const tables = await tx.$queryRawUnsafe(
       `SELECT table_name FROM information_schema.tables WHERE table_schema = '${SCHEMA}'`,
@@ -64,6 +77,7 @@ async function scenario(name, extra) {
     );
     return {
       columns: columns.map((c) => c.column_name),
+      productColumns: productColumns.map((c) => c.column_name),
       tables: tables.map((t) => t.table_name).sort(),
       indexes: indexes.map((i) => i.indexname).sort(),
     };
@@ -71,13 +85,15 @@ async function scenario(name, extra) {
 
   const missing = EXPECTED_ORDER_COLUMNS.filter((c) => !result.columns.includes(c));
   const extraCols = result.columns.filter((c) => !EXPECTED_ORDER_COLUMNS.includes(c));
+  const missingProduct = EXPECTED_PRODUCT_COLUMNS.filter((c) => !result.productColumns.includes(c));
 
   console.log(`\n[${name}]`);
   console.log('  таблицы:', result.tables.join(', '));
   console.log('  колонок в Order:', result.columns.length, missing.length ? `НЕ ХВАТАЕТ: ${missing}` : '— все на месте');
   if (extraCols.length) console.log('  лишние колонки:', extraCols.join(', '));
+  console.log('  склад в Product:', missingProduct.length ? `НЕ ХВАТАЕТ: ${missingProduct}` : 'stock на месте');
   console.log('  индексов:', result.indexes.length);
-  return { ok: missing.length === 0 && extraCols.length === 0, ...result };
+  return { ok: missing.length === 0 && extraCols.length === 0 && missingProduct.length === 0, ...result };
 }
 
 try {
@@ -85,8 +101,8 @@ try {
   const b = await scenario('B: база после db push', DRIFT);
 
   const same =
-    JSON.stringify([a.tables, a.indexes, [...a.columns].sort()]) ===
-    JSON.stringify([b.tables, b.indexes, [...b.columns].sort()]);
+    JSON.stringify([a.tables, a.indexes, [...a.columns].sort(), [...a.productColumns].sort()]) ===
+    JSON.stringify([b.tables, b.indexes, [...b.columns].sort(), [...b.productColumns].sort()]);
 
   console.log('\nитог:', a.ok && b.ok && same ? 'ОК — оба сценария дают одинаковую корректную структуру' : 'ПРОБЛЕМА');
 } catch (error) {

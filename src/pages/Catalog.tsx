@@ -6,6 +6,7 @@ import { useProductStore } from '../store/useProductStore';
 import { useCartStore } from '../store/useCartStore';
 import { haptic } from '../utils/haptics';
 import { Icon } from '../components/Icon';
+import { isAvailable, maxQty, stockHint } from '../utils/stock';
 import { EASE_OUT } from '../utils/motion';
 
 const money = (value: number) => value.toLocaleString('ru-RU');
@@ -72,6 +73,15 @@ export function Catalog() {
 
   const handleAddToCart = (e: React.MouseEvent, product: typeof products[0]) => {
     e.stopPropagation();
+    if (!isAvailable(product)) return;
+
+    // Остаток на складе — потолок и для быстрого «плюса» из каталога.
+    const inCart = useCartStore.getState().items.find((i) => i.productId === product.id)?.qty ?? 0;
+    if (inCart >= maxQty(product)) {
+      haptic.error();
+      return;
+    }
+
     haptic.addToCart();
     addItem({
       productId: product.id,
@@ -211,7 +221,10 @@ export function Catalog() {
         {isLoading ? (
           <SkeletonGrid />
         ) : (
-          filtered.map((p) => (
+          filtered.map((p) => {
+            const available = isAvailable(p);
+            const hint = stockHint(p);
+            return (
             <motion.div
               key={p.id}
               className="flex cursor-pointer flex-col gap-2"
@@ -225,7 +238,7 @@ export function Catalog() {
                     layoutId={`catalog-${p.id}`}
                     src={p.images[0]}
                     alt={p.name}
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full object-cover ${available ? '' : 'opacity-55 saturate-50'}`}
                     loading="lazy"
                   />
                 ) : (
@@ -240,6 +253,18 @@ export function Catalog() {
 
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/20 to-transparent" />
 
+                {/* Остаток: «нет в наличии» гасит кнопку, «осталось N» подгоняет */}
+                {!available ? (
+                  <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-md">
+                    Нет в наличии
+                  </span>
+                ) : hint ? (
+                  <span className="absolute bottom-2.5 left-2.5 rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-bold text-accent-deep backdrop-blur-md">
+                    {hint}
+                  </span>
+                ) : null}
+
+                {available && (
                 <div className="absolute bottom-2.5 right-2.5">
                   {addedId === p.id && (
                     <motion.span
@@ -270,6 +295,7 @@ export function Catalog() {
                     </AnimatePresence>
                   </motion.button>
                 </div>
+                )}
               </div>
 
               <div className="px-1">
@@ -277,7 +303,8 @@ export function Catalog() {
                 <p className="text-xs font-semibold tabular-nums text-primary">{money(p.price)} ₽</p>
               </div>
             </motion.div>
-          ))
+            );
+          })
         )}
       </motion.div>
 

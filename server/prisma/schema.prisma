@@ -33,6 +33,9 @@ model Product {
   baseNote    String   @default("")
   images      String   @default("[]") // JSON массив URL
   inStock     Boolean  @default(true)
+  /// Остаток на складе в штуках. NULL — учёт не ведётся (товар всегда доступен,
+  /// как было до появления склада). Число — списывается при создании заказа.
+  stock       Int?
   isFeatured  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -73,6 +76,11 @@ model Order {
   promoCode      String?
   discount       Int      @default(0) // скидка в копейках
   status         String   @default("NEW") // "NEW" | "CONFIRMED" | "SHIPPED" | "DONE" | "CANCELLED"
+
+  /// Когда остаток по позициям заказа вернулся на склад (отмена заказа).
+  /// NULL — товары всё ещё числятся за этим заказом. Защищает от двойного
+  /// возврата, если статус «Отменён» выставят повторно.
+  stockReturnedAt DateTime?
 
   // --- Оплата ---
   paymentType    String   @default("MANUAL") // "ONLINE" | "MANUAL"

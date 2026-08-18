@@ -49,6 +49,8 @@ interface Product {
   heartNote: string;
   baseNote: string;
   inStock: boolean;
+  /** Остаток в штуках. null — учёт не ведётся. */
+  stock: number | null;
   isFeatured: boolean;
   // API отдаёт уже разобранный массив (в БД лежит JSON-строкой).
   images: string[];
@@ -158,7 +160,7 @@ export function Admin() {
   const [editProductId, setEditProductId] = useState<number | null>(null);
   const [productForm, setProductForm] = useState({
     name: '', slug: '', description: '', price: '', category: 'Ароматические',
-    topNote: '', heartNote: '', baseNote: '', imageUrls: '', inStock: true, isFeatured: false
+    topNote: '', heartNote: '', baseNote: '', imageUrls: '', stock: '', inStock: true, isFeatured: false
   });
 
   // Названия способов доставки берём с сервера — в заказе лежит код (CDEK).
@@ -306,6 +308,14 @@ export function Admin() {
         .map((url) => url.trim())
         .filter(Boolean);
 
+      // Пустой остаток — учёт по этому товару не ведём (товар всегда доступен).
+      const rawStock = productForm.stock.trim();
+      const stock = rawStock === '' ? null : Math.max(0, Math.floor(Number(rawStock)));
+      if (stock !== null && !Number.isFinite(stock)) {
+        alert('Остаток должен быть числом или пустым');
+        return;
+      }
+
       const payload = {
         name: productForm.name,
         slug: productForm.slug,
@@ -316,6 +326,7 @@ export function Admin() {
         heartNote: productForm.heartNote,
         baseNote: productForm.baseNote,
         images,
+        stock,
         inStock: productForm.inStock,
         isFeatured: productForm.isFeatured
       };
@@ -339,7 +350,9 @@ export function Admin() {
       name: p.name, slug: p.slug, description: p.description,
       price: String(p.price), category: p.category,
       topNote: p.topNote, heartNote: p.heartNote, baseNote: p.baseNote,
-      imageUrls: (p.images || []).join('\n'), inStock: p.inStock, isFeatured: p.isFeatured
+      imageUrls: (p.images || []).join('\n'),
+      stock: p.stock === null || p.stock === undefined ? '' : String(p.stock),
+      inStock: p.inStock, isFeatured: p.isFeatured
     });
     setEditProductId(p.id);
     setShowProductForm(true);
@@ -685,7 +698,7 @@ export function Admin() {
           <button
             onClick={() => {
               setEditProductId(null);
-              setProductForm({ name: '', slug: '', description: '', price: '', category: 'Ароматические', topNote: '', heartNote: '', baseNote: '', imageUrls: '', inStock: true, isFeatured: false });
+              setProductForm({ name: '', slug: '', description: '', price: '', category: 'Ароматические', topNote: '', heartNote: '', baseNote: '', imageUrls: '', stock: '', inStock: true, isFeatured: false });
               setShowProductForm(true);
             }}
             className="w-full mb-4 rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2"
@@ -696,6 +709,8 @@ export function Admin() {
           <div className="flex flex-col gap-3">
             {loading ? <div className="animate-pulse h-20 bg-white rounded-2xl" /> : products.map((p, idx) => {
               const img = p.images?.[0] || '';
+              const tracked = p.stock !== null && p.stock !== undefined;
+              const soldOut = p.inStock && tracked && (p.stock as number) <= 0;
               return (
                 <motion.div
                   key={p.id}
@@ -712,14 +727,27 @@ export function Admin() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium text-text-sub">{money(p.price)} ₽</span>
                       <span className="text-2xs text-text-sub bg-pastel-ivory px-1.5 rounded">{p.category}</span>
+                      {tracked && (
+                        <span className={`text-2xs font-bold ${soldOut ? 'text-danger' : 'text-text-sub'}`}>
+                          {p.stock} шт.
+                        </span>
+                      )}
                       {p.images?.length > 1 && (
                         <span className="text-2xs text-text-sub">{p.images.length} фото</span>
                       )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`rounded-full px-2 py-0.5 text-2xs font-bold ${p.inStock ? 'bg-emerald-50 text-emerald-700' : 'bg-danger/10 text-danger'}`}>
-                      {p.inStock ? 'В наличии' : 'Скрыт'}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-2xs font-bold ${
+                        !p.inStock
+                          ? 'bg-danger/10 text-danger'
+                          : soldOut
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-emerald-50 text-emerald-700'
+                      }`}
+                    >
+                      {!p.inStock ? 'Скрыт' : soldOut ? 'Кончился' : 'В наличии'}
                     </span>
                     <button onClick={() => openEditProduct(p)} className="text-2xs font-bold text-primary uppercase mt-1">Редакт.</button>
                     {p.inStock && (
@@ -810,6 +838,22 @@ export function Admin() {
                     className="w-full rounded-xl bg-pastel-ivory/50 p-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
                   />
                   <p className="mt-1 text-2xs text-text-sub">Первая — обложка в каталоге, остальные попадут в галерею товара.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Остаток, шт.</label>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={productForm.stock}
+                    onChange={e => setProductForm({...productForm, stock: e.target.value})}
+                    placeholder="не ограничен"
+                    className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <p className="mt-1 text-2xs text-text-sub">
+                    Списывается при оформлении заказа и возвращается при отмене. Пусто — учёт не ведётся,
+                    товар всегда доступен. 0 — покупатель видит «нет в наличии».
+                  </p>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>

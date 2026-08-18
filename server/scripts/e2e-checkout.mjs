@@ -203,6 +203,69 @@ try {
   const orders = await get('/orders');
   const onlyMine = Array.isArray(orders.json) && orders.json.every((o) => o.userName !== 'Чужой');
   check('в списке заказов только свои', onlyMine, `видно ${orders.json.length} заказ(ов)`);
+
+  console.log('\n8. Склад: списание, нехватка и возврат при отмене');
+  const limited = await admin.product.create({
+    data: {
+      name: 'E2E Limited', slug: 'e2e-limited-' + Date.now(), description: 'тест склада',
+      price: 100000, category: 'Тест', images: JSON.stringify([]), stock: 3,
+    },
+  });
+  const stockOf = async (id) => (await admin.product.findUnique({ where: { id } }))?.stock;
+  /** Самовывоз + оплата «при получении»: короткий путь без адреса и платежа. */
+  const buy = (productId, qty) => post('/orders', {
+    items: [{ productId, qty }],
+    userName: 'Тест Тестов', userPhone: '+7 999 123-45-67',
+    deliveryMethod: 'PICKUP', consent: true, paymentType: 'MANUAL',
+  });
+
+  const tooMany = await buy(limited.id, 5);
+  check('заказ больше остатка отклонён', tooMany.status === 409, tooMany.json.error);
+  check('отклонённый заказ остаток не тронул', (await stockOf(limited.id)) === 3);
+
+  const firstBuy = await buy(limited.id, 2);
+  const afterFirst = await stockOf(limited.id);
+  check('остаток списан в транзакции заказа', firstBuy.status === 201 && afterFirst === 1, `осталось ${afterFirst}`);
+
+  const overLimit = await buy(limited.id, 2);
+  check('второй заказ на остаток 1 отклонён', overLimit.status === 409, overLimit.json.error);
+
+  const lastOne = await buy(limited.id, 1);
+  const afterLast = await stockOf(limited.id);
+  check('последняя штука продана, остаток 0', lastOne.status === 201 && afterLast === 0, `осталось ${afterLast}`);
+
+  const soldOut = await buy(limited.id, 1);
+  check('товар с нулевым остатком не продаётся', soldOut.status === 409, soldOut.json.error);
+
+  const catalog = await get('/products');
+  const listed = Array.isArray(catalog.json) ? catalog.json.find((p) => p.id === limited.id) : null;
+  check('каталог отдаёт остаток фронту', listed?.stock === 0, `stock=${listed?.stock}`);
+
+  // Отмену делает админ: ADMIN_IDS читается на каждом запросе, поэтому гостя
+  // (id = 0) можно сделать админом только на эти два вызова.
+  const cancel = async (orderId) => {
+    process.env.ADMIN_IDS = '0';
+    try {
+      return await fetch(`${api}/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'CANCELLED' }),
+      });
+    } finally {
+      process.env.ADMIN_IDS = '';
+    }
+  };
+
+  const cancelled = await cancel(firstBuy.json.id);
+  const afterCancel = await stockOf(limited.id);
+  check('отмена заказа вернула 2 шт. на склад', cancelled.status === 200 && afterCancel === 2, `осталось ${afterCancel}`);
+
+  await cancel(firstBuy.json.id);
+  const afterTwice = await stockOf(limited.id);
+  check('повторная отмена остаток не задваивает', afterTwice === 2, `осталось ${afterTwice}`);
+
+  const unlimited = await buy(product.id, 40);
+  check('товар без учёта склада не ограничен', unlimited.status === 201 && (await stockOf(product.id)) === null);
 } catch (error) {
   console.error('\nОШИБКА:', error?.message);
   process.exitCode = 1;
