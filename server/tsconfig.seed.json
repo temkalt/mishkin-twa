@@ -1,0 +1,14 @@
+// Сид собирается отдельно от src: у основного tsconfig `rootDir: ./src`,
+// поэтому prisma/seed.ts туда не попадает и в контейнере не было
+// dist/prisma/seed.js (entrypoint падал в `npx tsx`, которого в прод-образе нет).
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./prisma",
+    "outDir": "./dist/prisma",
+    "types": ["node"],
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["prisma/seed.ts"]
+}

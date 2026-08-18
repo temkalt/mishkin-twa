@@ -5,21 +5,32 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && tsc -p tsconfig.seed.json",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "start": "node dist/index.js",
     "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:setup": "prisma db push && tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:setup": "prisma migrate deploy && tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:check": "node scripts/db-check.mjs",
+    "test:migrations": "node scripts/verify-migrations.mjs",
+    "test:e2e": "node scripts/e2e-checkout.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.9.0",
+    "compression": "1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "telegraf": "^4.16.3"
+    "express-rate-limit": "8.2.1",
+    "helmet": "8.1.0",
+    "telegraf": "^4.16.3",
+    "zod": "4.1.13"
   },
   "devDependencies": {
+    "@types/compression": "1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.2",
     "@types/node": "^24.13.3",

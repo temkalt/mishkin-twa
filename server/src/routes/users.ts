@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../middleware/isAdmin.js';
 import { bot } from '../lib/bot.js';
@@ -12,6 +13,23 @@ router.post('/auth', async (req, res) => {
 
     if (!tgUser || !tgUser.id) {
       res.status(400).json({ error: 'Telegram user data required' });
+      return;
+    }
+
+    const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => id.trim());
+    const userIsAdmin = adminIds.includes(tgUser.id.toString());
+
+    // Гостя из браузерного демо в базу не пишем — иначе статистика засоряется.
+    if (tgUser.id === 0) {
+      res.json({
+        id: 0,
+        telegramId: 0,
+        firstName: tgUser.first_name,
+        lastName: null,
+        username: tgUser.username || null,
+        isAdmin: false,
+        guest: true,
+      });
       return;
     }
 
@@ -31,10 +49,6 @@ router.post('/auth', async (req, res) => {
       },
     });
 
-    // Проверяем, является ли пользователь админом
-    const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => id.trim());
-    const userIsAdmin = adminIds.includes(tgUser.id.toString());
-
     res.json({
       id: user.id,
       telegramId: Number(user.telegramId),
@@ -42,6 +56,7 @@ router.post('/auth', async (req, res) => {
       lastName: user.lastName,
       username: user.username,
       isAdmin: userIsAdmin,
+      guest: false,
     });
   } catch (error) {
     console.error('Error authenticating user:', error);
@@ -49,27 +64,41 @@ router.post('/auth', async (req, res) => {
   }
 });
 
-// GET /api/users/stats — статистика пользователей (admin)
+// GET /api/users/stats — статистика (admin)
 router.get('/stats', isAdmin, async (_req, res) => {
   try {
-    const totalUsers = await prisma.user.count();
-
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const activeUsersWeek = await prisma.user.count({
-      where: { lastVisit: { gte: weekAgo } },
-    });
 
-    const totalOrders = await prisma.order.count();
-    const newOrders = await prisma.order.count({
-      where: { status: 'NEW' },
-    });
+    const [totalUsers, activeUsersWeek, totalOrders, newOrders, paidAgg, weekPaidAgg] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { lastVisit: { gte: weekAgo } } }),
+      prisma.order.count(),
+      prisma.order.count({ where: { status: 'NEW' } }),
+      prisma.order.aggregate({
+        where: { paymentStatus: 'PAID' },
+        _sum: { totalPrice: true },
+        _count: true,
+      }),
+      prisma.order.aggregate({
+        where: { paymentStatus: 'PAID', paidAt: { gte: weekAgo } },
+        _sum: { totalPrice: true },
+      }),
+    ]);
+
+    const revenue = (paidAgg._sum.totalPrice || 0) / 100;
+    const paidOrders = paidAgg._count;
 
     res.json({
       totalUsers,
       activeUsersWeek,
       totalOrders,
       newOrders,
+      paidOrders,
+      revenue,
+      revenueWeek: (weekPaidAgg._sum.totalPrice || 0) / 100,
+      averageOrder: paidOrders > 0 ? Math.round(revenue / paidOrders) : 0,
+      conversion: totalUsers > 0 ? Math.round((paidOrders / totalUsers) * 1000) / 10 : 0,
     });
   } catch (error) {
     console.error('Error fetching user stats:', error);
@@ -77,38 +106,53 @@ router.get('/stats', isAdmin, async (_req, res) => {
   }
 });
 
-// POST /api/users/broadcast — рассылка сообщений пользователям (admin)
+const broadcastSchema = z.object({
+  message: z.string().trim().min(1, 'Введите текст').max(4000),
+});
+
+/** Telegram допускает ~30 сообщений в секунду — шлём пачками, а не по одному. */
+const BATCH_SIZE = 25;
+const BATCH_PAUSE_MS = 1100;
+
+// POST /api/users/broadcast — рассылка (admin)
 router.post('/broadcast', isAdmin, async (req, res) => {
+  const parsed = broadcastSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Введите текст' });
+    return;
+  }
+
   try {
-    const { message } = req.body;
-    if (!message || typeof message !== 'string') {
-      res.status(400).json({ error: 'Message is required' });
-      return;
-    }
-
-    const users = await prisma.user.findMany({
-      select: { telegramId: true },
-    });
-
+    const users = await prisma.user.findMany({ select: { telegramId: true } });
     let successCount = 0;
+    let blockedCount = 0;
     let failCount = 0;
 
-    for (const user of users) {
-      try {
-        await bot.telegram.sendMessage(user.telegramId.toString(), message, { parse_mode: 'Markdown' });
-        successCount++;
-      } catch (err) {
-        failCount++;
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((user) =>
+          bot.telegram.sendMessage(user.telegramId.toString(), parsed.data.message, { parse_mode: 'Markdown' }),
+        ),
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          successCount++;
+        } else {
+          // 403 = пользователь заблокировал бота: это не сбой рассылки.
+          const code = (result.reason as { response?: { error_code?: number } })?.response?.error_code;
+          if (code === 403) blockedCount++;
+          else failCount++;
+        }
       }
-      // Задержка 50мс для предотвращения блокировки (ограничение TG - 30 сообщений в секунду)
-      await new Promise(resolve => setTimeout(resolve, 50));
+
+      if (i + BATCH_SIZE < users.length) {
+        await new Promise((resolve) => setTimeout(resolve, BATCH_PAUSE_MS));
+      }
     }
 
-    res.json({
-      total: users.length,
-      successCount,
-      failCount,
-    });
+    res.json({ total: users.length, successCount, blockedCount, failCount });
   } catch (error) {
     console.error('Error broadcasting message:', error);
     res.status(500).json({ error: 'Failed to broadcast message' });

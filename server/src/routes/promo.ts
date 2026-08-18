@@ -1,21 +1,36 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../middleware/isAdmin.js';
 
 const router = Router();
 
+const validateSchema = z.object({
+  code: z.string().trim().min(1, 'Введите промокод').max(40),
+});
+
+const createSchema = z.object({
+  code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/, 'Код: латиница, цифры, дефис'),
+  discountType: z.enum(['PERCENT', 'FIXED']),
+  discountValue: z.number().positive(),
+  usageLimit: z.number().int().min(0).max(1_000_000).default(0),
+}).superRefine((data, ctx) => {
+  if (data.discountType === 'PERCENT' && data.discountValue > 100) {
+    ctx.addIssue({ code: 'custom', path: ['discountValue'], message: 'Процент не может быть больше 100' });
+  }
+});
+
 // POST /api/promo/validate — проверить промокод (публичный)
 router.post('/validate', async (req, res) => {
+  const parsed = validateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Введите промокод' });
+    return;
+  }
+
   try {
-    const { code } = req.body;
-
-    if (!code) {
-      res.status(400).json({ error: 'Promo code is required' });
-      return;
-    }
-
     const promo = await prisma.promoCode.findUnique({
-      where: { code: code.toUpperCase() },
+      where: { code: parsed.data.code.toUpperCase() },
     });
 
     if (!promo || !promo.isActive) {
@@ -60,25 +75,29 @@ router.get('/', isAdmin, async (_req, res) => {
 
 // POST /api/promo — создать промокод (admin)
 router.post('/', isAdmin, async (req, res) => {
+  const parsed = createSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Некорректные данные промокода' });
+    return;
+  }
+
   try {
-    const { code, discountType, discountValue, usageLimit } = req.body;
-
-    if (!code || !discountType || discountValue === undefined) {
-      res.status(400).json({ error: 'code, discountType, discountValue are required' });
-      return;
-    }
-
+    const { code, discountType, discountValue, usageLimit } = parsed.data;
     const promo = await prisma.promoCode.create({
       data: {
         code: code.toUpperCase(),
         discountType,
-        discountValue: discountType === 'FIXED' ? Math.round(discountValue * 100) : discountValue,
-        usageLimit: usageLimit || 0,
+        discountValue: discountType === 'FIXED' ? Math.round(discountValue * 100) : Math.round(discountValue),
+        usageLimit,
       },
     });
 
     res.status(201).json(promo);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      res.status(409).json({ error: 'Такой промокод уже есть' });
+      return;
+    }
     console.error('Error creating promo:', error);
     res.status(500).json({ error: 'Failed to create promo code' });
   }

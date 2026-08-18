@@ -1,8 +1,26 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../middleware/isAdmin.js';
 
 const router = Router();
+
+const productSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug: только латиница, цифры и дефис'),
+  description: z.string().trim().max(4000).default(''),
+  price: z.number().positive().max(10_000_000),
+  category: z.string().trim().min(1).max(60),
+  topNote: z.string().trim().max(120).default(''),
+  heartNote: z.string().trim().max(120).default(''),
+  baseNote: z.string().trim().max(120).default(''),
+  images: z.array(z.string().trim().max(500)).max(10).default([]),
+  inStock: z.boolean().default(true),
+  isFeatured: z.boolean().default(false),
+});
+
+/** На обновление принимаем те же поля, но все опциональные. */
+const productUpdateSchema = productSchema.partial();
 
 // GET /api/products — список товаров (публичный)
 router.get('/', async (req, res) => {
@@ -53,6 +71,21 @@ router.get('/categories', async (_req, res) => {
   }
 });
 
+/**
+ * GET /api/products/admin/all — все товары, включая скрытые (admin).
+ * Публичный список отдаёт только `inStock: true`, поэтому «удалённый» товар
+ * иначе исчезал из админки навсегда и его нельзя было вернуть в продажу.
+ */
+router.get('/admin/all', isAdmin, async (_req, res) => {
+  try {
+    const products = await prisma.product.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json(products.map((p) => ({ ...p, images: JSON.parse(p.images), price: p.price / 100 })));
+  } catch (error) {
+    console.error('Error fetching all products:', error);
+    res.status(500).json({ error: 'Failed to fetch products' });
+  }
+});
+
 // GET /api/products/:id — один товар
 router.get('/:id', async (req, res) => {
   try {
@@ -77,26 +110,28 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/products — создать товар (admin)
 router.post('/', isAdmin, async (req, res) => {
-  try {
-    const { name, slug, description, price, category, topNote, heartNote, baseNote, images, isFeatured } = req.body;
+  const parsed = productSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Некорректные данные товара' });
+    return;
+  }
 
+  try {
+    const { price, images, ...rest } = parsed.data;
     const product = await prisma.product.create({
       data: {
-        name,
-        slug,
-        description: description || '',
+        ...rest,
         price: Math.round(price * 100), // рубли -> копейки
-        category,
-        topNote: topNote || '',
-        heartNote: heartNote || '',
-        baseNote: baseNote || '',
-        images: JSON.stringify(images || []),
-        isFeatured: isFeatured || false,
+        images: JSON.stringify(images),
       },
     });
 
     res.status(201).json(product);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      res.status(409).json({ error: 'Товар с таким slug уже есть' });
+      return;
+    }
     console.error('Error creating product:', error);
     res.status(500).json({ error: 'Failed to create product' });
   }
@@ -104,23 +139,22 @@ router.post('/', isAdmin, async (req, res) => {
 
 // PUT /api/products/:id — обновить товар (admin)
 router.put('/:id', isAdmin, async (req, res) => {
+  const parsed = productUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Некорректные данные товара' });
+    return;
+  }
+
   try {
     const id = parseInt(String(req.params.id), 10);
-    const data: Record<string, unknown> = { ...req.body };
 
-    // Конвертируем цену если передана
-    if (data.price !== undefined) {
-      data.price = Math.round((data.price as number) * 100);
-    }
-    if (data.images !== undefined) {
-      data.images = JSON.stringify(data.images);
-    }
+    // Явный whitelist: в prisma.update летят только известные поля, а не весь body.
+    const { price, images, ...rest } = parsed.data;
+    const data: Record<string, unknown> = { ...rest };
+    if (price !== undefined) data.price = Math.round(price * 100);
+    if (images !== undefined) data.images = JSON.stringify(images);
 
-    const product = await prisma.product.update({
-      where: { id },
-      data,
-    });
-
+    const product = await prisma.product.update({ where: { id }, data });
     res.json(product);
   } catch (error) {
     console.error('Error updating product:', error);

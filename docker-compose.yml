@@ -1,6 +1,23 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: mishkin_postgres
+    environment:
+      POSTGRES_USER: mishkin
+      POSTGRES_PASSWORD: mishkin_local
+      POSTGRES_DB: mishkin
+    ports:
+      # Порт открыт наружу, чтобы с хоста работали prisma migrate / studio.
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mishkin -d mishkin"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   backend:
     build:
       context: ./server
@@ -9,10 +26,14 @@ services:
     env_file:
       - ./server/.env
     environment:
-      - DATABASE_URL=file:/app/prisma/data/dev.db
-      - PORT=3000
-    volumes:
-      - prisma_data:/app/prisma/data
+      # Схема Prisma — postgresql, поэтому и здесь Postgres, а не SQLite-файл.
+      DATABASE_URL: postgresql://mishkin:mishkin_local@postgres:5432/mishkin?schema=public
+      DIRECT_URL: postgresql://mishkin:mishkin_local@postgres:5432/mishkin?schema=public
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -29,4 +50,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  prisma_data:
+  pgdata:

@@ -62,17 +62,45 @@ model Order {
   userCity       String   @default("")
   userAddress    String   @default("")
   userPostal     String   @default("")
-  deliveryMethod String   @default("CDEK") // СДЭК, Почта России, Самовывоз
+  deliveryMethod String   @default("CDEK") // СДЭК, Почта России, Boxberry, Самовывоз
+  deliveryPrice  Int      @default(0) // стоимость доставки в копейках
+  trackNumber    String   @default("")
   comment        String   @default("")
   tgUsername     String?
   items          String   // JSON: [{ productId, name, price, qty }]
-  totalPrice     Int      // итоговая сумма в копейках
+  itemsTotal     Int      @default(0) // сумма товаров до скидки, в копейках
+  totalPrice     Int      // к оплате в копейках (товары − скидка + доставка)
   promoCode      String?
   discount       Int      @default(0) // скидка в копейках
   status         String   @default("NEW") // "NEW" | "CONFIRMED" | "SHIPPED" | "DONE" | "CANCELLED"
+
+  // --- Оплата ---
+  paymentType    String   @default("MANUAL") // "ONLINE" | "MANUAL"
+  paymentStatus  String   @default("UNPAID") // "UNPAID" | "PENDING" | "PAID" | "CANCELED" | "REFUNDED"
+  paymentId      String?  @unique // id платежа в ЮKassa
+  paymentMethod  String   @default("") // bank_card, sbp, yoo_money…
+  paidAt         DateTime?
+  consentAt      DateTime? // согласие на обработку ПДн (152-ФЗ)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([telegramUserId])
   @@index([status])
+  @@index([paymentStatus])
+}
+
+/// Журнал входящих уведомлений от ЮKassa — обеспечивает идемпотентность
+/// (одно и то же событие приходит повторно при ретраях платёжного шлюза).
+model PaymentEvent {
+  id        Int      @id @default(autoincrement())
+  eventKey  String   @unique // "<event>:<paymentId>:<status>"
+  paymentId String
+  event     String
+  status    String
+  amount    Int      @default(0) // в копейках
+  payload   String   // сырое тело уведомления
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
 }

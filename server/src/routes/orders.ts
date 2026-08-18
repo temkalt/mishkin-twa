@@ -1,201 +1,283 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../middleware/isAdmin.js';
 import { bot } from '../lib/bot.js';
+import { notifyOrderStatus } from '../lib/paymentService.js';
+import {
+  DELIVERY_OPTIONS,
+  FREE_DELIVERY_FROM,
+  findDeliveryOption,
+  deliveryPriceFor,
+} from '../lib/delivery.js';
 
 const router = Router();
 
+const ORDER_STATUSES = ['NEW', 'CONFIRMED', 'SHIPPED', 'DONE', 'CANCELLED'] as const;
+
+const createOrderSchema = z
+  .object({
+    items: z
+      .array(
+        z.object({
+          productId: z.number().int().positive(),
+          qty: z.number().int().min(1).max(99),
+        }),
+      )
+      .min(1, 'Корзина пуста')
+      .max(50),
+    userName: z.string().trim().min(2, 'Укажите имя').max(80),
+    userPhone: z
+      .string()
+      .trim()
+      .refine((value) => value.replace(/\D/g, '').length >= 10, 'Некорректный телефон'),
+    userCity: z.string().trim().max(120).default(''),
+    userAddress: z.string().trim().max(300).default(''),
+    userPostal: z.string().trim().max(12).default(''),
+    deliveryMethod: z.string().trim().min(1, 'Выберите способ доставки').max(40),
+    comment: z.string().trim().max(1000).default(''),
+    promoCode: z.string().trim().max(40).nullish(),
+    paymentType: z.enum(['ONLINE', 'MANUAL']).default('ONLINE'),
+    consent: z.literal(true, { message: 'Нужно согласие на обработку персональных данных' }),
+  })
+  .superRefine((data, ctx) => {
+    const option = findDeliveryOption(data.deliveryMethod);
+    if (!option) {
+      ctx.addIssue({ code: 'custom', path: ['deliveryMethod'], message: 'Неизвестный способ доставки' });
+      return;
+    }
+    // Адрес обязателен только там, где он нужен — самовывоз без адреса.
+    if (option.requiresAddress) {
+      if (!data.userCity) {
+        ctx.addIssue({ code: 'custom', path: ['userCity'], message: 'Укажите город' });
+      }
+      if (!data.userAddress) {
+        ctx.addIssue({ code: 'custom', path: ['userAddress'], message: 'Укажите адрес или пункт выдачи' });
+      }
+    }
+  });
+
+const rub = (kopecks: number) => (kopecks / 100).toLocaleString('ru-RU');
+
+/** GET /api/orders/delivery-options — способы доставки и их цены. */
+router.get('/delivery-options', (_req, res) => {
+  res.json({
+    freeFrom: FREE_DELIVERY_FROM / 100,
+    options: DELIVERY_OPTIONS.map((option) => ({ ...option, price: option.price / 100 })),
+  });
+});
+
 // POST /api/orders — создать заказ
 router.post('/', async (req, res) => {
+  const parsed = createOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: parsed.error.issues[0]?.message || 'Некорректные данные заказа',
+      issues: parsed.error.issues.map((issue) => ({ field: issue.path.join('.'), message: issue.message })),
+    });
+    return;
+  }
+
+  const input = parsed.data;
+  const telegramUserId = req.telegramUser?.id ?? 0;
+  const tgUsername = req.telegramUser?.username || null;
+
   try {
-    const { items, userName, userPhone, userCity, userAddress, userPostal, deliveryMethod, comment, promoCode } = req.body;
-    const telegramUserId = req.telegramUser?.id || 0;
-    const tgUsername = req.telegramUser?.username || null;
+    // Цены берём из БД, а не из запроса — клиент не может назначить свою цену.
+    const productIds = [...new Set(input.items.map((item) => item.productId))];
+    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
+    const byId = new Map(products.map((product) => [product.id, product]));
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: 'Cart is empty' });
+    const missing = productIds.filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      res.status(400).json({ error: `Товар #${missing[0]} больше не доступен` });
       return;
     }
-    if (!userName || typeof userName !== 'string' || !userName.trim()) {
-      res.status(400).json({ error: 'User name is required' });
-      return;
-    }
-    if (!userPhone || typeof userPhone !== 'string' || !userPhone.trim()) {
-      res.status(400).json({ error: 'Phone number is required' });
-      return;
-    }
-    if (!deliveryMethod || typeof deliveryMethod !== 'string') {
-      res.status(400).json({ error: 'Delivery method is required' });
+    const unavailable = products.find((product) => !product.inStock);
+    if (unavailable) {
+      res.status(409).json({ error: `«${unavailable.name}» закончился — уберите его из корзины` });
       return;
     }
 
-    // Подсчитываем итоговую сумму, подтягивая цены из БД
-    let totalPrice = 0;
-    const orderItems: Array<{ productId: number; name: string; price: number; qty: number; image?: string }> = [];
-
-    for (const item of items) {
-      const product = await prisma.product.findUnique({ where: { id: item.productId } });
-      if (!product) {
-        res.status(400).json({ error: `Product #${item.productId} not found` });
-        return;
-      }
-      
-      let img = '';
+    let itemsTotal = 0;
+    const orderItems = input.items.map((item) => {
+      const product = byId.get(item.productId)!;
+      let image = '';
       try {
-        const imgs = JSON.parse(product.images);
-        img = imgs[0] || '';
-      } catch { /* ignore */ }
+        image = (JSON.parse(product.images) as string[])[0] || '';
+      } catch {
+        /* картинка не обязательна */
+      }
+      itemsTotal += product.price * item.qty;
+      return { productId: product.id, name: product.name, price: product.price, qty: item.qty, image };
+    });
 
-      const lineTotal = product.price * item.qty;
-      totalPrice += lineTotal;
-      orderItems.push({
-        productId: product.id,
-        name: product.name,
-        price: product.price,
-        qty: item.qty,
-        image: img,
-      });
-    }
+    const deliveryPrice = deliveryPriceFor(input.deliveryMethod, itemsTotal);
+    const deliveryOption = findDeliveryOption(input.deliveryMethod)!;
 
-    // Обработка промокода
-    let discount = 0;
-    let appliedPromoCode: string | null = null;
+    // Промокод и заказ — в одной транзакции: счётчик использований не уедет
+    // при одновременных заказах, и заказ не создастся со «сгоревшей» скидкой.
+    const { order, discount, appliedPromo } = await prisma.$transaction(async (tx) => {
+      let discountValue = 0;
+      let appliedCode: string | null = null;
 
-    if (promoCode) {
-      const promo = await prisma.promoCode.findUnique({
-        where: { code: promoCode.toUpperCase() },
-      });
+      if (input.promoCode) {
+        const promo = await tx.promoCode.findUnique({ where: { code: input.promoCode.toUpperCase() } });
+        const usable = promo && promo.isActive && (promo.usageLimit === 0 || promo.usageCount < promo.usageLimit);
 
-      if (promo && promo.isActive) {
-        if (promo.usageLimit === 0 || promo.usageCount < promo.usageLimit) {
-          if (promo.discountType === 'PERCENT') {
-            discount = Math.round(totalPrice * (promo.discountValue / 100));
-          } else {
-            discount = promo.discountValue;
-          }
-          // Скидка не может превышать общую сумму
-          discount = Math.min(discount, totalPrice);
-          appliedPromoCode = promo.code;
+        if (usable) {
+          discountValue =
+            promo.discountType === 'PERCENT'
+              ? Math.round(itemsTotal * (promo.discountValue / 100))
+              : promo.discountValue;
+          discountValue = Math.min(discountValue, itemsTotal);
+          appliedCode = promo.code;
 
-          // Увеличить счётчик использований
-          await prisma.promoCode.update({
+          await tx.promoCode.update({
             where: { id: promo.id },
-            data: { usageCount: promo.usageCount + 1 },
+            data: { usageCount: { increment: 1 } },
           });
         }
       }
-    }
 
-    const finalPrice = Math.max(0, totalPrice - discount);
+      const totalPrice = Math.max(0, itemsTotal - discountValue) + deliveryPrice;
 
-    // Создаём заказ
-    const order = await prisma.order.create({
-      data: {
-        telegramUserId: BigInt(telegramUserId),
-        userName: userName || 'Гость',
-        userPhone: userPhone || '',
-        userCity: userCity || '',
-        userAddress: userAddress || '',
-        userPostal: userPostal || '',
-        deliveryMethod: deliveryMethod || 'CDEK',
-        comment: comment || '',
-        tgUsername: tgUsername,
-        items: JSON.stringify(orderItems),
-        totalPrice: finalPrice,
-        promoCode: appliedPromoCode,
-        discount,
-        status: 'NEW',
-      },
+      const created = await tx.order.create({
+        data: {
+          telegramUserId: BigInt(telegramUserId),
+          userName: input.userName,
+          userPhone: input.userPhone,
+          userCity: input.userCity,
+          userAddress: deliveryOption.requiresAddress ? input.userAddress : '',
+          userPostal: deliveryOption.requiresAddress ? input.userPostal : '',
+          deliveryMethod: deliveryOption.id,
+          deliveryPrice,
+          comment: input.comment,
+          tgUsername,
+          items: JSON.stringify(orderItems),
+          itemsTotal,
+          totalPrice,
+          promoCode: appliedCode,
+          discount: discountValue,
+          status: 'NEW',
+          paymentType: input.paymentType,
+          paymentStatus: 'UNPAID',
+          consentAt: new Date(),
+        },
+      });
+
+      return { order: created, discount: discountValue, appliedPromo: appliedCode };
     });
 
-    // Отправляем уведомление менеджеру в Telegram
-    try {
-      const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => parseInt(id.trim(), 10));
-
-      const itemsText = orderItems
-        .map((item) => `  • ${item.name} × ${item.qty} = ${(item.price * item.qty / 100).toLocaleString('ru-RU')} ₽`)
-        .join('\n');
-
-      const tgUserId = req.telegramUser?.id || '';
-      const tgUserLink = tgUsername ? `[@${tgUsername}](https://t.me/${tgUsername})` : `[Профиль](tg://user?id=${tgUserId})`;
-
-      const message =
-        `🔔 *Новый заказ #${order.id}*\n\n` +
-        `👤 Клиент: ${userName || 'Гость'} (TG: ${tgUserLink})\n` +
-        `📱 Телефон: ${userPhone || 'не указан'}\n` +
-        `🚚 Способ доставки: ${deliveryMethod || 'не указан'}\n` +
-        `🏙 Город: ${userCity || 'не указан'}\n` +
-        `📍 Адрес: ${userAddress || 'не указан'}\n` +
-        `📮 Индекс: ${userPostal || 'не указан'}\n` +
-        (comment ? `💬 Комментарий: ${comment}\n\n` : '\n') +
-        `📦 Товары:\n${itemsText}\n\n` +
-        (discount > 0 ? `🏷 Промокод: ${appliedPromoCode} (-${(discount / 100).toLocaleString('ru-RU')} ₽)\n` : '') +
-        `💰 *Итого: ${(finalPrice / 100).toLocaleString('ru-RU')} ₽*`;
-
-      for (const adminId of adminIds) {
-        if (adminId) {
-          await bot.telegram.sendMessage(adminId, message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
-        }
-      }
-    } catch (notifyError) {
-      console.error('Failed to notify admin:', notifyError);
-      // Не прерываем — заказ уже создан
-    }
+    void notifyNewOrder({ order, orderItems, deliveryLabel: deliveryOption.label, discount, appliedPromo });
 
     res.status(201).json({
-      id: Number(order.id),
-      totalPrice: finalPrice / 100,
+      id: order.id,
+      itemsTotal: itemsTotal / 100,
+      deliveryPrice: deliveryPrice / 100,
+      totalPrice: order.totalPrice / 100,
       discount: discount / 100,
       status: order.status,
+      paymentType: order.paymentType,
+      paymentStatus: order.paymentStatus,
     });
   } catch (error) {
     console.error('Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(500).json({ error: 'Не удалось создать заказ' });
   }
 });
+
+/** Сообщение менеджеру о новом заказе. Падение уведомления не ломает заказ. */
+async function notifyNewOrder(params: {
+  order: { id: number; userName: string; userPhone: string; userCity: string; userAddress: string; userPostal: string; comment: string; totalPrice: number; paymentType: string; tgUsername: string | null; telegramUserId: bigint };
+  orderItems: Array<{ name: string; price: number; qty: number }>;
+  deliveryLabel: string;
+  discount: number;
+  appliedPromo: string | null;
+}): Promise<void> {
+  const { order, orderItems, deliveryLabel, discount, appliedPromo } = params;
+
+  const adminIds = (process.env.ADMIN_IDS || '')
+    .replace(/["']/g, '')
+    .split(',')
+    .map((id) => parseInt(id.trim(), 10))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  if (adminIds.length === 0) return;
+
+  const itemsText = orderItems
+    .map((item) => `  • ${item.name} × ${item.qty} = ${rub(item.price * item.qty)} ₽`)
+    .join('\n');
+
+  const tgLink = order.tgUsername
+    ? `[@${order.tgUsername}](https://t.me/${order.tgUsername})`
+    : `[Профиль](tg://user?id=${order.telegramUserId.toString()})`;
+
+  const message =
+    `🔔 *Новый заказ #${order.id}*\n\n` +
+    `👤 Клиент: ${order.userName} (TG: ${tgLink})\n` +
+    `📱 Телефон: ${order.userPhone}\n` +
+    `🚚 Доставка: ${deliveryLabel}\n` +
+    (order.userCity ? `🏙 Город: ${order.userCity}\n` : '') +
+    (order.userAddress ? `📍 Адрес: ${order.userAddress}\n` : '') +
+    (order.userPostal ? `📮 Индекс: ${order.userPostal}\n` : '') +
+    (order.comment ? `💬 Комментарий: ${order.comment}\n` : '') +
+    `\n📦 Товары:\n${itemsText}\n\n` +
+    (discount > 0 ? `🏷 Промокод: ${appliedPromo} (−${rub(discount)} ₽)\n` : '') +
+    `💰 *Итого: ${rub(order.totalPrice)} ₽*\n` +
+    `${order.paymentType === 'ONLINE' ? '💳 Ожидает онлайн-оплату' : '🤝 Оплата при получении / по договорённости'}`;
+
+  for (const adminId of adminIds) {
+    try {
+      await bot.telegram.sendMessage(adminId, message, {
+        parse_mode: 'Markdown',
+        link_preview_options: { is_disabled: true },
+      });
+    } catch (error) {
+      console.error('Failed to notify admin:', adminId, error);
+    }
+  }
+}
 
 // GET /api/orders — заказы пользователя (или все для админа)
 router.get('/', async (req, res) => {
   try {
-    const telegramUserId = req.telegramUser?.id || 0;
-    const adminIdsRaw = process.env.ADMIN_IDS || '';
-    const adminIds = adminIdsRaw.replace(/["']/g, '').split(',').map((id) => id.trim());
-    
+    const telegramUserId = req.telegramUser?.id ?? 0;
+    const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => id.trim());
     const isUserAdmin = adminIds.includes(telegramUserId.toString());
+
+    const take = Math.min(Number(req.query.limit) || 50, 100);
+    const skip = Math.max(Number(req.query.offset) || 0, 0);
 
     const orders = await prisma.order.findMany({
       where: isUserAdmin ? undefined : { telegramUserId: BigInt(telegramUserId) },
       orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
 
-    // Получаем все продукты для быстрого поиска картинок
+    // Картинки товаров могли появиться уже после заказа — подставим свежие.
     const allProducts = await prisma.product.findMany({ select: { id: true, images: true } });
-    const productImagesMap = new Map<number, string>();
-    for (const p of allProducts) {
+    const imageById = new Map<number, string>();
+    for (const product of allProducts) {
       try {
-        const imgs = JSON.parse(p.images);
-        productImagesMap.set(p.id, imgs[0] || '');
+        imageById.set(product.id, (JSON.parse(product.images) as string[])[0] || '');
       } catch {
-        productImagesMap.set(p.id, '');
+        imageById.set(product.id, '');
       }
     }
 
-    const parsed = orders.map((o) => {
-      const parsedItems = JSON.parse(o.items).map((item: any) => {
-        if (!item.image && productImagesMap.has(item.productId)) {
-          item.image = productImagesMap.get(item.productId);
-        }
-        return item;
-      });
-
-      return {
-        ...o,
-        telegramUserId: Number(o.telegramUserId),
-        items: parsedItems,
-        totalPrice: o.totalPrice / 100,
-        discount: o.discount / 100,
-      };
-    });
+    const parsed = orders.map((order) => ({
+      ...order,
+      telegramUserId: Number(order.telegramUserId),
+      items: (JSON.parse(order.items) as Array<{ productId: number; image?: string }>).map((item) => ({
+        ...item,
+        image: item.image || imageById.get(item.productId) || '',
+      })),
+      itemsTotal: order.itemsTotal / 100,
+      deliveryPrice: order.deliveryPrice / 100,
+      totalPrice: order.totalPrice / 100,
+      discount: order.discount / 100,
+    }));
 
     res.json(parsed);
   } catch (error) {
@@ -204,24 +286,33 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PATCH /api/orders/:id/status — обновить статус (admin/demo)
-router.patch('/:id/status', async (req, res) => {
+const statusSchema = z.object({
+  status: z.enum(ORDER_STATUSES),
+  trackNumber: z.string().trim().max(60).optional(),
+});
+
+// PATCH /api/orders/:id/status — сменить статус (только админ)
+router.patch('/:id/status', isAdmin, async (req, res) => {
+  const parsed = statusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Некорректный статус' });
+    return;
+  }
+
   try {
     const id = parseInt(String(req.params.id), 10);
-    const { status } = req.body;
-
-    const validStatuses = ['NEW', 'CONFIRMED', 'SHIPPED', 'DONE', 'CANCELLED'];
-    if (!validStatuses.includes(status)) {
-      res.status(400).json({ error: 'Invalid status' });
-      return;
-    }
-
     const order = await prisma.order.update({
       where: { id },
-      data: { status },
+      data: {
+        status: parsed.data.status,
+        ...(parsed.data.trackNumber !== undefined ? { trackNumber: parsed.data.trackNumber } : {}),
+      },
     });
 
-    res.json({ id: order.id, status: order.status });
+    // Клиент узнаёт о смене статуса сам, без звонка менеджера.
+    void notifyOrderStatus(order.telegramUserId, order.id, order.status);
+
+    res.json({ id: order.id, status: order.status, trackNumber: order.trackNumber });
   } catch (error) {
     console.error('Error updating order status:', error);
     res.status(500).json({ error: 'Failed to update order status' });

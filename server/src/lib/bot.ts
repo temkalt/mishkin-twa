@@ -1,7 +1,8 @@
 import { Telegraf, Markup } from 'telegraf';
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const WEBAPP_URL = 'https://mishkin-twa.vercel.app';
+const WEBAPP_URL = (process.env.WEBAPP_URL || 'https://mishkin-twa.vercel.app').replace(/\/+$/, '');
+const CHANNEL_URL = process.env.CHANNEL_URL || 'https://t.me/mishkin_candles';
 
 if (!BOT_TOKEN) {
   console.error('CRITICAL: BOT_TOKEN is missing!');
@@ -53,7 +54,7 @@ bot.start(async (ctx) => {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         [Markup.button.webApp('🛍 Открыть магазин', WEBAPP_URL)],
-        [Markup.button.url('📢 Наш канал', 'https://t.me/mishkin_candles')]
+        [Markup.button.url('📢 Наш канал', CHANNEL_URL)]
       ]),
     }
   );
