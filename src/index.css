@@ -1,18 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Manrope — текст, Jost — заголовки. Один запрос к Google Fonts вместо двух
+   плюс ненадёжный cdnfonts, откуда раньше тянулся Bahnschrift (на телефонах он
+   всё равно не загружался и заголовки молча падали в Manrope). */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Jost:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  @font-face {
-    font-family: 'Bahnschrift';
-    src: local('Bahnschrift'), local('Bahnschrift_Regular'), url('https://fonts.cdnfonts.com/s/20888/Bahnschrift.woff') format('woff');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
   * {
     -webkit-tap-highlight-color: transparent;
   }
@@ -22,7 +17,7 @@
   }
 
   body {
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', system-ui, sans-serif;
     background-color: theme('colors.background-light');
     color: theme('colors.text-main');
     -webkit-font-smoothing: antialiased;
@@ -30,14 +25,56 @@
     overscroll-behavior-y: contain;
   }
 
-  .dark body {
-    background-color: theme('colors.background-dark');
-    color: theme('colors.pastel-ivory');
-  }
-
   img {
     -webkit-user-drag: none;
     user-select: none;
+  }
+
+  /* Доступность: клавиатурный фокус виден, но не мешает тапам на телефоне. */
+  :focus-visible {
+    outline: 2px solid theme('colors.primary');
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Единый вид полей ввода — раньше каждый экран описывал их заново. */
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+    font-size: 16px; /* меньше 16px — iOS зумит страницу при фокусе */
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-4 py-3.5 text-text-main
+           outline-none transition-colors placeholder:text-text-sub/60
+           focus:border-primary focus:ring-2 focus:ring-primary/15;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-2xs font-bold uppercase tracking-wider text-text-sub;
+  }
+
+  .btn-primary {
+    @apply relative w-full overflow-hidden rounded-2xl bg-primary py-4 font-bold text-white
+           shadow-glow transition-transform active:scale-[0.98]
+           disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none;
+  }
+
+  .btn-ghost {
+    @apply w-full rounded-2xl bg-pastel-ivory py-3.5 font-semibold text-text-main
+           transition-transform active:scale-[0.98];
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-bold
+           uppercase tracking-wider;
+  }
+
+  .card {
+    @apply rounded-2xl border border-line/60 bg-surface shadow-soft;
   }
 }
 
@@ -72,21 +109,12 @@
     animation: shimmer 1.8s ease-in-out infinite;
   }
 
-  /* Page transitions */
-  .page-slide-up {
-    animation: fadeInUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
   /* Frosted glass nav */
   .glass-nav {
     background: rgba(253, 251, 247, 0.72);
     backdrop-filter: blur(22px) saturate(1.4);
     -webkit-backdrop-filter: blur(22px) saturate(1.4);
     box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
-  }
-  .dark .glass-nav {
-    background: rgba(28, 25, 23, 0.68);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
   }
 
   /* Gradient brand text */
@@ -106,12 +134,6 @@
       radial-gradient(70% 60% at 50% 100%, rgba(235, 229, 217, 0.55) 0%, transparent 70%);
     background-size: 180% 180%;
     animation: gradientPan 14s ease-in-out infinite;
-  }
-  .dark .mesh-bg {
-    background-color: theme('colors.background-dark');
-    background-image:
-      radial-gradient(60% 45% at 15% 0%, rgba(107, 140, 90, 0.16) 0%, transparent 60%),
-      radial-gradient(50% 40% at 100% 10%, rgba(212, 163, 115, 0.12) 0%, transparent 55%);
   }
 
   /* Fine film grain overlay for a tactile, premium surface */
@@ -146,6 +168,12 @@
   }
   .tap-highlight:active {
     transform: scale(0.95);
+  }
+
+  /* Плавное появление под шапкой на длинных страницах */
+  .fade-edge-top {
+    mask-image: linear-gradient(to bottom, transparent, black 12px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 12px);
   }
 }
 

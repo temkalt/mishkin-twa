@@ -1,25 +1,32 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getWebApp } from './utils/telegram';
+import { getWebApp, isInTelegram } from './utils/telegram';
 import { Splash } from './components/Splash';
 import { SubscriptionPopup } from './components/SubscriptionPopup';
 import { BottomNav } from './components/BottomNav';
 import { api } from './utils/api';
 import type { UserAuth } from './utils/types';
 import { useUserStore } from './store/useUserStore';
+import { useShopConfig } from './store/useShopConfig';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Catalog = lazy(() => import('./pages/Catalog').then(m => ({ default: m.Catalog })));
 const Product = lazy(() => import('./pages/Product').then(m => ({ default: m.Product })));
 const Cart = lazy(() => import('./pages/Cart').then(m => ({ default: m.Cart })));
+const Checkout = lazy(() => import('./pages/Checkout').then(m => ({ default: m.Checkout })));
+const OrderResult = lazy(() => import('./pages/OrderResult').then(m => ({ default: m.OrderResult })));
 const Orders = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
+const Legal = lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+
+// Верхний уровень навигации: здесь Telegram-кнопка «назад» не нужна.
+const TOP_LEVEL_ROUTES = ['/', '/catalog', '/cart', '/orders', '/admin'];
 
 // Minimal inline fallback — avoids spinner flash between route changes
 function PageFallback() {
   return (
-    <div className="min-h-screen bg-background-light flex items-end justify-center pb-32">
+    <div className="flex min-h-screen items-end justify-center bg-background-light pb-32">
       <motion.div
         className="flex gap-1.5"
         initial={{ opacity: 0 }}
@@ -43,39 +50,45 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [authReady, setAuthReady] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const webApp = getWebApp();
-    if (webApp && webApp.initData) {
-      webApp.ready();
-      webApp.expand();
-      if (webApp.requestFullscreen) {
-        webApp.requestFullscreen();
-      }
-    }
-    // Always render in the light theme — dark mode is disabled by request.
-    document.documentElement.classList.remove('dark');
+    // Инициализация Telegram живёт в main.tsx — здесь только авторизация.
+    api.post<UserAuth>('/users/auth', {})
+      .then((data) => {
+        if (data.isAdmin) useUserStore.getState().setAdmin(true);
+      })
+      .catch(() => {
+        // Молча: без авторизации пользователь просто не получит админку.
+      })
+      .finally(() => setAuthReady(true));
 
-    api.post<UserAuth>('/users/auth', {}).then((data) => {
-      if (data.isAdmin) {
-        useUserStore.getState().setAdmin(true);
-      }
-    }).catch(() => {
-      // silent fail — user just won't have admin
-    }).finally(() => {
-      setAuthReady(true);
-    });
+    // Настройки магазина нужны и корзине, и чекауту — тянем заранее.
+    void useShopConfig.getState().load();
   }, []);
+
+  // Возврат из оплаты: Telegram открывает Mini App со start_param=paid-<id>.
+  useEffect(() => {
+    if (showSplash) return;
+    const startParam = getWebApp()?.initDataUnsafe?.start_param;
+    const match = startParam?.match(/^paid-(\d+)$/);
+    if (match) {
+      navigate(`/order/${match[1]}`, { replace: true });
+      return;
+    }
+    // В браузере тот же случай приходит как ?paid=<id>.
+    const paid = new URLSearchParams(window.location.search).get('paid');
+    if (paid && /^\d+$/.test(paid)) navigate(`/order/${paid}`, { replace: true });
+  }, [showSplash, navigate]);
 
   // Telegram BackButton
   useEffect(() => {
     const webApp = getWebApp();
-    if (!webApp?.initData) return;
+    if (!isInTelegram() || !webApp) return;
 
-    const topLevelRoutes = ['/', '/catalog', '/cart', '/orders', '/admin'];
     const handleBack = () => window.history.back();
 
-    if (topLevelRoutes.includes(location.pathname)) {
+    if (TOP_LEVEL_ROUTES.includes(location.pathname)) {
       webApp.BackButton.hide();
     } else {
       webApp.BackButton.show();
@@ -91,7 +104,7 @@ function App() {
       setShowSplash(false);
       return;
     }
-    // Wait for auth, max 2.5s
+    // Ждём авторизацию, но не дольше 2.5 с — иначе сплэш «залипает».
     const timeout = setTimeout(() => setShowSplash(false), 2500);
     const poll = setInterval(() => {
       if (authReady) {
@@ -103,24 +116,18 @@ function App() {
     return () => { clearInterval(poll); clearTimeout(timeout); };
   };
 
-  // Determine slide direction for product pages
+  // Страница товара выезжает снизу, остальные — растворяются.
   const isProductPage = location.pathname.startsWith('/product/');
   const pageVariants = {
-    initial: isProductPage
-      ? { opacity: 0, y: 30 }
-      : { opacity: 0 },
+    initial: isProductPage ? { opacity: 0, y: 30 } : { opacity: 0 },
     animate: { opacity: 1, y: 0 },
-    exit: isProductPage
-      ? { opacity: 0, y: 20 }
-      : { opacity: 0 },
+    exit: isProductPage ? { opacity: 0, y: 20 } : { opacity: 0 },
   };
 
   return (
-    <div className="min-h-screen w-full relative bg-background-light dark:bg-background-dark text-text-main dark:text-pastel-ivory overflow-hidden">
+    <div className="relative min-h-screen w-full overflow-hidden bg-background-light text-text-main">
       <AnimatePresence mode="wait">
-        {showSplash && (
-          <Splash key="splash" onComplete={handleSplashComplete} />
-        )}
+        {showSplash && <Splash key="splash" onComplete={handleSplashComplete} />}
       </AnimatePresence>
 
       {!showSplash && (
@@ -141,7 +148,10 @@ function App() {
                   <Route path="/catalog" element={<Catalog />} />
                   <Route path="/product/:id" element={<Product />} />
                   <Route path="/cart" element={<Cart />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/order/:id" element={<OrderResult />} />
                   <Route path="/orders" element={<Orders />} />
+                  <Route path="/legal" element={<Legal />} />
                   <Route path="/admin" element={<Admin />} />
                 </Routes>
               </motion.div>

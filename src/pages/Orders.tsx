@@ -1,53 +1,67 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import { haptic } from '../utils/haptics';
+import { Icon, type IconName } from '../components/Icon';
+import { EASE_OUT, fadeUp, staggerContainer } from '../utils/motion';
+import type { Order, PaymentStatus } from '../utils/types';
 
-interface OrderItem {
-  productId: number;
-  qty: number;
-  price: number; // in kopecks
-  name: string;
-  image?: string;
-}
+const money = (value: number) => value.toLocaleString('ru-RU');
 
-interface Order {
-  id: number;
-  totalPrice: number; // already in rubles (server divides /100)
-  discount: number;   // already in rubles
-  status: string;
-  createdAt: string;
-  items: OrderItem[];
-  userName?: string;
-  userPhone?: string;
-  userCity?: string;
-  userAddress?: string;
-  userPostal?: string;
-  deliveryMethod?: string;
-  comment?: string;
-}
-
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  NEW:       { label: 'Новый',        color: 'text-blue-600',    bg: 'bg-blue-50',    icon: 'schedule' },
-  CONFIRMED: { label: 'Подтверждён',  color: 'text-primary',     bg: 'bg-primary/10', icon: 'check_circle' },
-  SHIPPED:   { label: 'Отправлен',    color: 'text-amber-600',   bg: 'bg-amber-50',   icon: 'local_shipping' },
-  DONE:      { label: 'Доставлен',    color: 'text-emerald-600', bg: 'bg-emerald-50', icon: 'inventory' },
-  CANCELLED: { label: 'Отменён',      color: 'text-red-500',     bg: 'bg-red-50',     icon: 'cancel' },
+const STATUS_MAP: Record<string, { label: string; className: string; icon: IconName }> = {
+  NEW: { label: 'Новый', className: 'bg-blue-50 text-blue-700', icon: 'clock' },
+  CONFIRMED: { label: 'Подтверждён', className: 'bg-primary/10 text-primary', icon: 'check_circle' },
+  SHIPPED: { label: 'Отправлен', className: 'bg-amber-50 text-amber-700', icon: 'shipping' },
+  DONE: { label: 'Доставлен', className: 'bg-emerald-50 text-emerald-700', icon: 'package_done' },
+  CANCELLED: { label: 'Отменён', className: 'bg-danger/10 text-danger', icon: 'cancel' },
 };
+
+const PAYMENT_MAP: Record<PaymentStatus, { label: string; className: string; icon: IconName } | null> = {
+  UNPAID: null,
+  PENDING: { label: 'Ждёт оплаты', className: 'bg-accent/15 text-accent-deep', icon: 'clock' },
+  PAID: { label: 'Оплачен', className: 'bg-emerald-50 text-emerald-700', icon: 'wallet' },
+  CANCELED: { label: 'Оплата не прошла', className: 'bg-danger/10 text-danger', icon: 'alert' },
+  REFUNDED: { label: 'Возврат', className: 'bg-pastel-sand text-text-sub', icon: 'wallet' },
+};
+
+function OrderSkeleton() {
+  return (
+    <div className="card p-4">
+      <div className="mb-3 flex justify-between">
+        <div className="skeleton h-4 w-24 rounded-lg" />
+        <div className="skeleton h-5 w-20 rounded-full" />
+      </div>
+      <div className="mb-3 flex gap-2">
+        {[0, 1, 2].map((i) => <div key={i} className="skeleton size-12 rounded-lg" />)}
+      </div>
+      <div className="skeleton h-4 w-28 rounded-lg" />
+    </div>
+  );
+}
 
 export function Orders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  useEffect(() => {
-    api
-      .get<Order[]>('/orders')
-      .then(setOrders)
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setOrders(await api.get<Order[]>('/orders'));
+    } catch (err) {
+      setError((err as Error).message || 'Не удалось загрузить заказы');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <motion.div
@@ -56,186 +70,234 @@ export function Orders() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background-light/80 backdrop-blur-xl px-5 py-5">
+      <header className="glass-nav sticky top-0 z-40 px-5 py-5">
         <h1 className="font-display text-xl font-bold text-text-main">Мои заказы</h1>
+        {orders.length > 0 && (
+          <p className="text-2xs text-text-sub">{orders.length} шт. · нажмите, чтобы раскрыть</p>
+        )}
       </header>
 
       <div className="flex flex-col gap-3 px-4">
         {loading ? (
-          [1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-2xl bg-pastel-ivory/50 p-5">
-              <div className="flex justify-between mb-3">
-                <div className="h-4 w-24 rounded bg-pastel-sand/60" />
-                <div className="h-5 w-20 rounded-full bg-pastel-sand/40" />
-              </div>
-              <div className="h-3 w-32 rounded bg-pastel-sand/40 mb-2" />
-              <div className="h-4 w-20 rounded bg-pastel-sand/50" />
+          [1, 2, 3].map((i) => <OrderSkeleton key={i} />)
+        ) : error ? (
+          <div className="card p-6 text-center">
+            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-danger/10">
+              <Icon name="alert" size={22} className="text-danger" />
             </div>
-          ))
+            <h3 className="mb-1 font-display text-base font-bold text-text-main">Не удалось загрузить</h3>
+            <p className="mb-4 text-xs text-text-sub">{error}</p>
+            <button onClick={() => { haptic.tap(); void load(); }} className="text-xs font-bold text-primary underline">
+              Повторить
+            </button>
+          </div>
         ) : orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <span className="material-symbols-outlined text-6xl text-pastel-sand mb-4">receipt_long</span>
-            <h3 className="font-display text-lg font-bold text-text-main mb-2">Заказов пока нет</h3>
-            <p className="text-sm text-text-sub mb-6">Выберите свечи в каталоге и оформите первый заказ</p>
+            <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-pastel-ivory">
+              <Icon name="receipt_long" size={32} className="text-pastel-sand" />
+            </div>
+            <h3 className="mb-2 font-display text-lg font-bold text-text-main">Заказов пока нет</h3>
+            <p className="mb-6 max-w-[260px] text-sm text-text-sub">
+              Выберите свечи в каталоге и оформите первый заказ
+            </p>
             <button
-              onClick={() => navigate('/catalog')}
-              className="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20"
+              onClick={() => { haptic.tap(); navigate('/catalog'); }}
+              className="rounded-2xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-glow transition-transform active:scale-95"
             >
               Перейти в каталог
             </button>
           </div>
         ) : (
-          orders.map((order, idx) => {
-            const status = STATUS_MAP[order.status] || STATUS_MAP.NEW;
-            const date = new Date(order.createdAt);
-            const dateStr = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-            const isExpanded = expandedId === order.id;
+          <motion.div
+            className="flex flex-col gap-3"
+            variants={staggerContainer(0.05)}
+            initial="hidden"
+            animate="visible"
+          >
+            {orders.map((order) => {
+              const status = STATUS_MAP[order.status] || STATUS_MAP.NEW;
+              const paymentBadge = PAYMENT_MAP[order.paymentStatus];
+              const isExpanded = expandedId === order.id;
+              const dateStr = new Date(order.createdAt).toLocaleDateString('ru-RU', {
+                day: 'numeric', month: 'long', year: 'numeric',
+              });
+              const needsPayment =
+                order.paymentType === 'ONLINE' &&
+                (order.paymentStatus === 'PENDING' || order.paymentStatus === 'CANCELED' || order.paymentStatus === 'UNPAID') &&
+                order.status !== 'CANCELLED';
 
-            return (
-              <motion.div
-                key={order.id}
-                className="rounded-2xl bg-white shadow-sm border border-pastel-sand/30 overflow-hidden"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.06 }}
-              >
-                {/* Card header — clickable to expand */}
-                <button
-                  className="w-full text-left p-4"
-                  onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-bold text-text-main">Заказ #{order.id}</span>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold flex items-center gap-1 ${status.bg} ${status.color}`}>
-                        <span className="material-symbols-outlined text-[12px]">{status.icon}</span>
-                        {status.label}
-                      </span>
-                      <span className="material-symbols-outlined text-text-sub text-[18px] transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                        expand_more
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Items photo strip */}
-                  <div className="flex gap-2 mb-3 overflow-hidden">
-                    {order.items.slice(0, 3).map((item, i) => (
-                      <div key={item.productId || i} className="size-12 flex-shrink-0 rounded-lg bg-pastel-sand/30 overflow-hidden relative">
-                        {item.image ? (
-                          <img src={item.image} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full bg-pastel-ivory flex items-center justify-center">
-                            <span className="material-symbols-outlined text-text-sub text-[18px]">inventory_2</span>
-                          </div>
-                        )}
-                        {item.qty > 1 && (
-                          <span className="absolute bottom-0 right-0 bg-black/50 text-white text-[8px] font-bold px-1 rounded-tl">
-                            x{item.qty}
+              return (
+                <motion.div key={order.id} variants={fadeUp} className="card overflow-hidden">
+                  <button
+                    className="w-full p-4 text-left"
+                    onClick={() => { haptic.select(); setExpandedId(isExpanded ? null : order.id); }}
+                    aria-expanded={isExpanded}
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-text-main">Заказ #{order.id}</span>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        {paymentBadge && (
+                          <span className={`chip ${paymentBadge.className}`}>
+                            <Icon name={paymentBadge.icon} size={12} />
+                            {paymentBadge.label}
                           </span>
                         )}
+                        <span className={`chip ${status.className}`}>
+                          <Icon name={status.icon} size={12} />
+                          {status.label}
+                        </span>
+                        <motion.span
+                          animate={{ rotate: isExpanded ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="text-text-sub"
+                        >
+                          <Icon name="chevron_down" size={17} />
+                        </motion.span>
                       </div>
-                    ))}
-                    {order.items.length > 3 && (
-                      <div className="flex size-12 flex-shrink-0 items-center justify-center rounded-lg bg-pastel-ivory text-xs font-bold text-text-sub">
-                        +{order.items.length - 3}
-                      </div>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-text-sub">{dateStr}</span>
-                    <span className="text-sm font-bold text-text-main">
-                      {order.totalPrice.toLocaleString('ru-RU')} ₽
-                    </span>
-                  </div>
-                </button>
-
-                {/* Expanded details */}
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="border-t border-pastel-sand/30 overflow-hidden"
-                    >
-                      <div className="p-4 pt-3 flex flex-col gap-3">
-                        {/* Items list */}
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-text-sub mb-2">Состав заказа</p>
-                          <div className="flex flex-col gap-2">
-                            {order.items.map((item, i) => (
-                              <div key={item.productId || i} className="flex items-center gap-3">
-                                <div className="size-10 flex-shrink-0 rounded-lg bg-pastel-sand/30 overflow-hidden">
-                                  {item.image ? (
-                                    <img src={item.image} alt="" className="h-full w-full object-cover" />
-                                  ) : (
-                                    <div className="h-full w-full bg-pastel-ivory flex items-center justify-center">
-                                      <span className="material-symbols-outlined text-[14px] text-text-sub">inventory_2</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-text-main truncate">{item.name}</p>
-                                  <p className="text-[10px] text-text-sub">× {item.qty}</p>
-                                </div>
-                                <span className="text-xs font-bold text-text-main">
-                                  {(item.price * item.qty / 100).toLocaleString('ru-RU')} ₽
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Totals */}
-                        <div className="rounded-xl bg-pastel-ivory/50 p-3 flex flex-col gap-1.5">
-                          {order.discount > 0 && (
-                            <div className="flex justify-between text-xs">
-                              <span className="text-text-sub">Скидка (промокод)</span>
-                              <span className="text-emerald-600 font-bold">−{order.discount.toLocaleString('ru-RU')} ₽</span>
+                    <div className="mb-3 flex gap-2 overflow-hidden">
+                      {order.items.slice(0, 4).map((item, i) => (
+                        <div
+                          key={item.productId || i}
+                          className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-pastel-sand/30"
+                        >
+                          {item.image ? (
+                            <img src={item.image} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-pastel-ivory">
+                              <Icon name="package" size={17} className="text-text-sub" />
                             </div>
                           )}
-                          <div className="flex justify-between text-sm font-bold">
-                            <span className="text-text-main">Итого</span>
-                            <span className="text-primary">{order.totalPrice.toLocaleString('ru-RU')} ₽</span>
-                          </div>
+                          {item.qty > 1 && (
+                            <span className="absolute bottom-0 right-0 rounded-tl bg-black/55 px-1 text-[9px] font-bold text-white">
+                              ×{item.qty}
+                            </span>
+                          )}
                         </div>
+                      ))}
+                      {order.items.length > 4 && (
+                        <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-pastel-ivory text-xs font-bold text-text-sub">
+                          +{order.items.length - 4}
+                        </div>
+                      )}
+                    </div>
 
-                        {/* Delivery info */}
-                        {(order.userCity || order.userAddress || order.deliveryMethod) && (
-                          <div className="flex flex-col gap-1.5">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-text-sub">Доставка</p>
-                            {order.deliveryMethod && (
-                              <div className="flex items-center gap-2 text-xs text-text-sub">
-                                <span className="material-symbols-outlined text-[14px]">local_shipping</span>
-                                {order.deliveryMethod}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-sub">{dateStr}</span>
+                      <span className="text-sm font-bold tabular-nums text-text-main">
+                        {money(order.totalPrice)} ₽
+                      </span>
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.26, ease: EASE_OUT }}
+                        className="overflow-hidden border-t border-line/60"
+                      >
+                        <div className="flex flex-col gap-4 p-4">
+                          <div>
+                            <p className="field-label">Состав заказа</p>
+                            <div className="flex flex-col gap-2">
+                              {order.items.map((item, i) => (
+                                <div key={item.productId || i} className="flex items-center gap-3">
+                                  <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-pastel-sand/30">
+                                    {item.image ? (
+                                      <img src={item.image} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center bg-pastel-ivory">
+                                        <Icon name="package" size={14} className="text-text-sub" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-xs font-semibold text-text-main">{item.name}</p>
+                                    <p className="text-2xs text-text-sub">× {item.qty}</p>
+                                  </div>
+                                  <span className="text-xs font-bold tabular-nums text-text-main">
+                                    {money((item.price * item.qty) / 100)} ₽
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5 rounded-xl bg-pastel-ivory/60 p-3">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-text-sub">Товары</span>
+                              <span className="tabular-nums text-text-main">{money(order.itemsTotal)} ₽</span>
+                            </div>
+                            {order.discount > 0 && (
+                              <div className="flex justify-between text-xs">
+                                <span className="text-text-sub">Скидка</span>
+                                <span className="font-bold tabular-nums text-primary">−{money(order.discount)} ₽</span>
                               </div>
+                            )}
+                            <div className="flex justify-between text-xs">
+                              <span className="text-text-sub">Доставка</span>
+                              <span className="tabular-nums text-text-main">
+                                {order.deliveryPrice === 0 ? 'бесплатно' : `${money(order.deliveryPrice)} ₽`}
+                              </span>
+                            </div>
+                            <div className="flex justify-between border-t border-line pt-1.5 text-sm font-bold">
+                              <span className="text-text-main">Итого</span>
+                              <span className="tabular-nums text-primary">{money(order.totalPrice)} ₽</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <p className="field-label">Доставка</p>
+                            {order.deliveryMethod && (
+                              <InfoRow icon="shipping" text={order.deliveryMethod} />
                             )}
                             {order.userCity && (
-                              <div className="flex items-center gap-2 text-xs text-text-sub">
-                                <span className="material-symbols-outlined text-[14px]">location_on</span>
-                                {order.userCity}{order.userAddress ? `, ${order.userAddress}` : ''}{order.userPostal ? ` (${order.userPostal})` : ''}
-                              </div>
+                              <InfoRow
+                                icon="location"
+                                text={`${order.userCity}${order.userAddress ? `, ${order.userAddress}` : ''}${order.userPostal ? ` (${order.userPostal})` : ''}`}
+                              />
                             )}
-                            {order.comment && (
-                              <div className="flex items-start gap-2 text-xs text-text-sub">
-                                <span className="material-symbols-outlined text-[14px] mt-0.5">chat</span>
-                                <span className="italic">{order.comment}</span>
-                              </div>
+                            {order.trackNumber && (
+                              <InfoRow icon="package" text={`Трек-номер: ${order.trackNumber}`} />
                             )}
+                            {order.comment && <InfoRow icon="chat" text={order.comment} italic />}
                           </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })
+
+                          {needsPayment && (
+                            <button
+                              className="btn-primary"
+                              onClick={() => { haptic.press(); navigate(`/order/${order.id}`); }}
+                            >
+                              <span className="relative flex items-center justify-center gap-2">
+                                <Icon name="card" size={18} /> Оплатить {money(order.totalPrice)} ₽
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </motion.div>
         )}
       </div>
     </motion.div>
+  );
+}
+
+function InfoRow({ icon, text, italic }: { icon: IconName; text: string; italic?: boolean }) {
+  return (
+    <div className="flex items-start gap-2 text-xs text-text-sub">
+      <span className="mt-0.5 shrink-0">
+        <Icon name={icon} size={14} />
+      </span>
+      <span className={italic ? 'italic' : undefined}>{text}</span>
+    </div>
   );
 }

@@ -1,32 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import { Icon, type IconName } from '../components/Icon';
+import { useShopConfig } from '../store/useShopConfig';
+import type { OrderStatus, PaymentStatus, PaymentType } from '../utils/types';
 
 interface OrderItem {
   productId: number;
   qty: number;
-  price: number;
+  price: number; // в копейках — как сохранено в заказе
   name: string;
   image?: string;
 }
 
 interface AdminOrder {
   id: number;
+  itemsTotal: number;
+  deliveryPrice: number;
   totalPrice: number;
   discount: number;
-  status: string;
+  status: OrderStatus;
   userName: string;
   userPhone: string;
   userCity: string;
   userAddress: string;
   userPostal: string;
   deliveryMethod: string;
+  trackNumber: string;
   comment: string;
   tgUsername: string | null;
+  paymentType: PaymentType;
+  paymentStatus: PaymentStatus;
+  paymentMethod: string;
+  paidAt: string | null;
   createdAt: string;
   items: OrderItem[];
-  user: { telegramId: number; firstName: string; username: string | null };
 }
 
 interface Product {
@@ -41,7 +50,8 @@ interface Product {
   baseNote: string;
   inStock: boolean;
   isFeatured: boolean;
-  images: string;
+  // API отдаёт уже разобранный массив (в БД лежит JSON-строкой).
+  images: string[];
 }
 
 interface Stats {
@@ -70,20 +80,52 @@ const STATUS_LABELS: Record<string, string> = {
   DONE: 'Доставлен',
   CANCELLED: 'Отменён',
 };
+// Те же цвета и иконки, что в клиентских «Моих заказах» — один статус
+// выглядит одинаково у покупателя и у администратора.
 const STATUS_COLORS: Record<string, string> = {
-  NEW: 'bg-blue-50 text-blue-600',
-  CONFIRMED: 'bg-emerald-50 text-emerald-600',
-  SHIPPED: 'bg-amber-50 text-amber-600',
-  DONE: 'bg-green-50 text-green-700',
-  CANCELLED: 'bg-red-50 text-red-500',
+  NEW: 'bg-blue-50 text-blue-700',
+  CONFIRMED: 'bg-primary/10 text-primary',
+  SHIPPED: 'bg-amber-50 text-amber-700',
+  DONE: 'bg-emerald-50 text-emerald-700',
+  CANCELLED: 'bg-danger/10 text-danger',
 };
+const STATUS_ICONS: Record<string, IconName> = {
+  NEW: 'clock',
+  CONFIRMED: 'check_circle',
+  SHIPPED: 'shipping',
+  DONE: 'package_done',
+  CANCELLED: 'cancel',
+};
+
+const PAYMENT_LABELS: Record<PaymentStatus, { label: string; className: string; icon: IconName }> = {
+  UNPAID: { label: 'Не оплачен', className: 'bg-pastel-sand text-text-sub', icon: 'wallet' },
+  PENDING: { label: 'Ждёт оплаты', className: 'bg-accent/15 text-accent-deep', icon: 'clock' },
+  PAID: { label: 'Оплачен', className: 'bg-emerald-50 text-emerald-700', icon: 'wallet' },
+  CANCELED: { label: 'Оплата не прошла', className: 'bg-danger/10 text-danger', icon: 'alert' },
+  REFUNDED: { label: 'Возврат', className: 'bg-pastel-sand text-text-sub', icon: 'wallet' },
+};
+
+/** Названия способов оплаты, как их присылает ЮKassa. */
+const METHOD_LABELS: Record<string, string> = {
+  bank_card: 'Карта',
+  sbp: 'СБП',
+  yoo_money: 'ЮMoney',
+  sberbank: 'SberPay',
+  tinkoff_bank: 'Т-Банк',
+  mock: 'Эмулятор',
+};
+
+const money = (value: number) => value.toLocaleString('ru-RU');
 
 type Tab = 'stats' | 'orders' | 'products' | 'promo' | 'broadcast' | 'channel';
 
 export function Admin() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('stats');
-  
+
+  const deliveryConfig = useShopConfig((state) => state.delivery);
+  const loadShopConfig = useShopConfig((state) => state.load);
+
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -93,6 +135,9 @@ export function Admin() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  // Трек-номер вводится тут же, где меняется статус: «Отправлен» без трека
+  // покупателю ничего не говорит.
+  const [trackDrafts, setTrackDrafts] = useState<Record<number, string>>({});
 
   // Forms state
   const [showPromoForm, setShowPromoForm] = useState(false);
@@ -113,14 +158,18 @@ export function Admin() {
   const [editProductId, setEditProductId] = useState<number | null>(null);
   const [productForm, setProductForm] = useState({
     name: '', slug: '', description: '', price: '', category: 'Ароматические',
-    topNote: '', heartNote: '', baseNote: '', imageUrl: '', inStock: true, isFeatured: false
+    topNote: '', heartNote: '', baseNote: '', imageUrls: '', inStock: true, isFeatured: false
   });
 
+  // Названия способов доставки берём с сервера — в заказе лежит код (CDEK).
   useEffect(() => {
-    loadData();
-  }, [tab]);
+    void loadShopConfig();
+  }, [loadShopConfig]);
 
-  const loadData = async () => {
+  const deliveryLabel = (code: string) =>
+    deliveryConfig?.options.find((option) => option.id === code)?.label || code;
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
@@ -131,7 +180,8 @@ export function Admin() {
         const data = await api.get<AdminOrder[]>('/orders');
         setOrders(data);
       } else if (tab === 'products') {
-        const data = await api.get<Product[]>('/products');
+        // Админке нужны и скрытые товары: публичный список отдаёт только inStock.
+        const data = await api.get<Product[]>('/products/admin/all');
         setProducts(data);
       } else if (tab === 'promo') {
         const data = await api.get<PromoCode[]>('/promo');
@@ -143,17 +193,30 @@ export function Admin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tab]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
+    const trackNumber = (trackDrafts[orderId] ?? '').trim();
     setUpdatingId(orderId);
     try {
-      await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+      await api.patch(`/orders/${orderId}/status`, {
+        status: newStatus,
+        ...(trackNumber ? { trackNumber } : {}),
+      });
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, status: newStatus as OrderStatus, trackNumber: trackNumber || o.trackNumber }
+            : o,
+        )
       );
     } catch (err) {
       console.error('Status update error:', err);
+      alert(err instanceof Error ? err.message : 'Не удалось сменить статус');
     } finally {
       setUpdatingId(null);
     }
@@ -188,12 +251,13 @@ export function Admin() {
   };
 
   const handleDeleteProduct = async (id: number) => {
-    if (!confirm('Точно удалить товар?')) return;
+    // Товар не удаляется, а снимается с продажи: заказы с ним должны остаться.
+    if (!confirm('Снять товар с продажи? Он исчезнет из каталога, но останется в админке.')) return;
     try {
       await api.delete(`/products/${id}`);
       loadData();
     } catch (err) {
-      alert('Ошибка удаления товара');
+      alert(err instanceof Error ? err.message : 'Ошибка при снятии товара с продажи');
     }
   };
 
@@ -208,7 +272,7 @@ export function Admin() {
       setBroadcastResult(result);
       setBroadcastMessage('');
     } catch (err) {
-      alert('Ошибка при рассылке');
+      alert(err instanceof Error ? err.message : 'Ошибка при рассылке');
     } finally {
       setIsBroadcasting(false);
     }
@@ -235,6 +299,13 @@ export function Admin() {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Каждая строка — отдельное фото: карточка товара умеет галерею,
+      // а сервер принимает до 10 ссылок.
+      const images = productForm.imageUrls
+        .split('\n')
+        .map((url) => url.trim())
+        .filter(Boolean);
+
       const payload = {
         name: productForm.name,
         slug: productForm.slug,
@@ -244,7 +315,7 @@ export function Admin() {
         topNote: productForm.topNote,
         heartNote: productForm.heartNote,
         baseNote: productForm.baseNote,
-        images: productForm.imageUrl ? [productForm.imageUrl] : [],
+        images,
         inStock: productForm.inStock,
         isFeatured: productForm.isFeatured
       };
@@ -254,23 +325,21 @@ export function Admin() {
       } else {
         await api.post('/products', payload);
       }
-      
+
       setShowProductForm(false);
       loadData();
     } catch (err) {
       console.error(err);
-      alert('Ошибка при сохранении товара');
+      alert(err instanceof Error ? err.message : 'Ошибка при сохранении товара');
     }
   };
 
   const openEditProduct = (p: Product) => {
-    let img = '';
-    try { img = JSON.parse(p.images)[0] || ''; } catch { /* ignore */ }
     setProductForm({
       name: p.name, slug: p.slug, description: p.description,
       price: String(p.price), category: p.category,
       topNote: p.topNote, heartNote: p.heartNote, baseNote: p.baseNote,
-      imageUrl: img, inStock: p.inStock, isFeatured: p.isFeatured
+      imageUrls: (p.images || []).join('\n'), inStock: p.inStock, isFeatured: p.isFeatured
     });
     setEditProductId(p.id);
     setShowProductForm(true);
@@ -292,12 +361,13 @@ export function Admin() {
           <button
             onClick={() => navigate('/')}
             className="flex size-10 items-center justify-center rounded-full bg-pastel-ivory/80 transition-all active:scale-90"
+            aria-label="Назад"
           >
-            <span className="material-symbols-outlined text-text-main text-[20px]">arrow_back</span>
+            <Icon name="arrow_back" size={20} className="text-text-main" />
           </button>
           <div>
             <h1 className="font-display text-xl font-bold text-text-main">Админ-панель</h1>
-            <p className="text-[10px] text-text-sub uppercase tracking-wider">Управление магазином</p>
+            <p className="text-2xs text-text-sub uppercase tracking-wider">Управление магазином</p>
           </div>
         </div>
 
@@ -307,7 +377,7 @@ export function Admin() {
             <button
               key={t}
               onClick={() => setTab(t as Tab)}
-              className={`flex-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all min-w-[70px] ${
+              className={`flex-1 rounded-xl py-2 text-2xs font-bold uppercase tracking-wider transition-all min-w-[70px] ${
                 tab === t
                   ? 'bg-primary text-white shadow-md'
                   : 'text-text-sub hover:bg-pastel-sand/50'
@@ -326,7 +396,7 @@ export function Admin() {
             <div className="animate-pulse h-32 bg-white rounded-2xl" />
           ) : loadError ? (
             <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-center">
-              <span className="material-symbols-outlined text-3xl text-red-400 mb-2 block">error</span>
+              <Icon name="alert" size={30} className="mx-auto mb-2 text-danger" />
               <p className="text-sm font-bold text-red-600 mb-1">Ошибка загрузки</p>
               <p className="text-xs text-red-500 mb-3">{loadError}</p>
               <button onClick={loadData} className="text-xs font-bold text-primary underline">Повторить</button>
@@ -334,29 +404,29 @@ export function Admin() {
           ) : stats ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-pastel-sand/20 flex flex-col items-center text-center">
-                <span className="material-symbols-outlined text-3xl text-primary mb-2">group</span>
+                <Icon name="group" size={30} className="mb-2 text-primary" />
                 <span className="text-3xl font-display font-bold text-text-main">{stats.totalUsers}</span>
-                <span className="text-[10px] text-text-sub uppercase tracking-wider mt-1">Всего юзеров</span>
+                <span className="text-2xs text-text-sub uppercase tracking-wider mt-1">Всего юзеров</span>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-pastel-sand/20 flex flex-col items-center text-center">
-                <span className="material-symbols-outlined text-3xl text-emerald-500 mb-2">trending_up</span>
+                <Icon name="trending_up" size={30} className="mb-2 text-emerald-600" />
                 <span className="text-3xl font-display font-bold text-text-main">{stats.activeUsersWeek}</span>
-                <span className="text-[10px] text-text-sub uppercase tracking-wider mt-1">За неделю</span>
+                <span className="text-2xs text-text-sub uppercase tracking-wider mt-1">За неделю</span>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-pastel-sand/20 flex flex-col items-center text-center">
-                <span className="material-symbols-outlined text-3xl text-blue-500 mb-2">shopping_bag</span>
+                <Icon name="shopping_bag" size={30} className="mb-2 text-blue-600" />
                 <span className="text-3xl font-display font-bold text-text-main">{stats.totalOrders}</span>
-                <span className="text-[10px] text-text-sub uppercase tracking-wider mt-1">Всего заказов</span>
+                <span className="text-2xs text-text-sub uppercase tracking-wider mt-1">Всего заказов</span>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-pastel-sand/20 flex flex-col items-center text-center">
-                <span className="material-symbols-outlined text-3xl text-amber-500 mb-2">notifications_active</span>
+                <Icon name="notifications" size={30} className="mb-2 text-accent-deep" />
                 <span className="text-3xl font-display font-bold text-text-main">{stats.newOrders}</span>
-                <span className="text-[10px] text-text-sub uppercase tracking-wider mt-1">Новых заказов</span>
+                <span className="text-2xs text-text-sub uppercase tracking-wider mt-1">Новых заказов</span>
               </div>
             </div>
           ) : (
             <div className="rounded-2xl bg-pastel-ivory p-6 text-center">
-              <span className="material-symbols-outlined text-4xl text-text-sub mb-2 block">monitoring</span>
+              <Icon name="chart" size={36} className="mx-auto mb-2 text-text-sub" />
               <p className="text-sm text-text-sub">Нет данных статистики</p>
             </div>
           )}
@@ -370,7 +440,7 @@ export function Admin() {
             onClick={() => setShowPromoForm(true)}
             className="w-full mb-4 rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2"
           >
-            <span className="material-symbols-outlined text-[18px]">add</span> Создать промокод
+            <Icon name="add" size={18} /> Создать промокод
           </button>
           
           {loadError && (
@@ -383,14 +453,14 @@ export function Admin() {
           <div className="flex flex-col gap-3">
             {loading ? <div className="animate-pulse h-20 bg-white rounded-2xl" /> : promos.length === 0 ? (
               <div className="rounded-2xl bg-pastel-ivory p-6 text-center">
-                <span className="material-symbols-outlined text-4xl text-text-sub mb-2 block">percent</span>
+                <Icon name="percent" size={36} className="mx-auto mb-2 text-text-sub" />
                 <p className="text-sm text-text-sub">Промокодов пока нет</p>
               </div>
             ) : promos.map((p) => (
               <div key={p.id} className={`rounded-2xl p-4 shadow-sm border border-pastel-sand/20 ${p.isActive ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="font-display font-bold text-lg text-text-main tracking-wider">{p.code}</h4>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-2xs font-bold ${p.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
                     {p.isActive ? 'Активен' : 'Отключен'}
                   </span>
                 </div>
@@ -417,7 +487,7 @@ export function Admin() {
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-3">
             <button
               onClick={() => setStatusFilter('ALL')}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-bold transition-all ${
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-2xs font-bold transition-all ${
                 statusFilter === 'ALL'
                   ? 'bg-text-main text-white'
                   : 'bg-pastel-ivory/80 text-text-sub'
@@ -431,7 +501,7 @@ export function Admin() {
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-bold transition-all ${
+                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-2xs font-bold transition-all ${
                     statusFilter === s ? STATUS_COLORS[s] : 'bg-pastel-ivory/80 text-text-sub'
                   }`}
                 >
@@ -444,8 +514,16 @@ export function Admin() {
           <div className="flex flex-col gap-3">
             {loading ? (
               <div className="animate-pulse h-32 bg-white rounded-2xl" />
+            ) : filteredOrders.length === 0 ? (
+              <div className="rounded-2xl bg-pastel-ivory p-6 text-center">
+                <Icon name="receipt_long" size={36} className="mx-auto mb-2 text-text-sub" />
+                <p className="text-sm text-text-sub">
+                  {statusFilter === 'ALL' ? 'Заказов пока нет' : `Нет заказов в статусе «${STATUS_LABELS[statusFilter]}»`}
+                </p>
+              </div>
             ) : filteredOrders.map((order, idx) => {
                 const date = new Date(order.createdAt);
+                const payment = PAYMENT_LABELS[order.paymentStatus] || PAYMENT_LABELS.UNPAID;
                 return (
                   <motion.div
                     key={order.id}
@@ -461,46 +539,81 @@ export function Admin() {
                           {date.toLocaleDateString('ru-RU')} {date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${STATUS_COLORS[order.status]}`}>
+                      <span className={`chip ${STATUS_COLORS[order.status]}`}>
+                        <Icon name={STATUS_ICONS[order.status]} size={13} />
                         {STATUS_LABELS[order.status]}
                       </span>
                     </div>
 
+                    {/* Оплата: без неё непонятно, можно ли отправлять заказ. */}
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                      <span className={`chip ${payment.className}`}>
+                        <Icon name={payment.icon} size={13} />
+                        {payment.label}
+                      </span>
+                      <span className="chip bg-pastel-ivory text-text-sub">
+                        <Icon name={order.paymentType === 'ONLINE' ? 'card' : 'wallet'} size={13} />
+                        {order.paymentType === 'ONLINE' ? 'Онлайн' : 'При получении'}
+                      </span>
+                      {order.paymentMethod && (
+                        <span className="chip bg-pastel-ivory text-text-sub">
+                          {METHOD_LABELS[order.paymentMethod] || order.paymentMethod}
+                        </span>
+                      )}
+                      {order.paidAt && (
+                        <span className="text-2xs text-text-sub">
+                          оплачен {new Date(order.paidAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+
                     <div className="mb-3 rounded-xl bg-pastel-ivory/50 p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="material-symbols-outlined text-[14px] text-text-sub">person</span>
+                        <Icon name="person" size={14} className="text-text-sub" />
                         <span className="text-xs font-medium text-text-main">{order.userName}</span>
-                        {(order.tgUsername || order.user?.username) && (
-                          <span className="text-xs text-primary">@{order.tgUsername || order.user?.username}</span>
+                        {order.tgUsername && (
+                          <a
+                            href={`https://t.me/${order.tgUsername}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-primary"
+                          >
+                            @{order.tgUsername}
+                          </a>
                         )}
                       </div>
                       {order.userPhone && (
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="material-symbols-outlined text-[14px] text-text-sub">phone</span>
-                          <span className="text-xs text-text-sub">{order.userPhone}</span>
+                          <Icon name="phone" size={14} className="text-text-sub" />
+                          <a href={`tel:${order.userPhone.replace(/[^\d+]/g, '')}`} className="text-xs text-text-sub">
+                            {order.userPhone}
+                          </a>
                         </div>
                       )}
                       {order.userCity && (
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="material-symbols-outlined text-[14px] text-text-sub">location_on</span>
+                          <Icon name="location" size={14} className="text-text-sub" />
                           <span className="text-xs text-text-sub">{order.userCity}</span>
                         </div>
                       )}
                       {order.userAddress && (
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="material-symbols-outlined text-[14px] text-text-sub">home</span>
+                          <Icon name="home" size={14} className="text-text-sub" />
                           <span className="text-xs text-text-sub">{order.userAddress} {order.userPostal && `(${order.userPostal})`}</span>
                         </div>
                       )}
                       {order.deliveryMethod && (
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="material-symbols-outlined text-[14px] text-text-sub">local_shipping</span>
-                          <span className="text-xs text-text-sub">{order.deliveryMethod}</span>
+                          <Icon name="shipping" size={14} className="text-text-sub" />
+                          <span className="text-xs text-text-sub">
+                            {deliveryLabel(order.deliveryMethod)}
+                            {order.trackNumber && ` · трек ${order.trackNumber}`}
+                          </span>
                         </div>
                       )}
                       {order.comment && (
                         <div className="flex items-start gap-2 mt-2 pt-2 border-t border-pastel-sand/30">
-                          <span className="material-symbols-outlined text-[14px] text-text-sub mt-0.5">chat</span>
+                          <Icon name="chat" size={14} className="mt-0.5 text-text-sub" />
                           <span className="text-xs text-text-sub italic">{order.comment}</span>
                         </div>
                       )}
@@ -515,27 +628,48 @@ export function Admin() {
                       ))}
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-pastel-sand/30 pt-2 mb-3">
+                    <div className="mb-3 flex flex-col gap-1 border-t border-pastel-sand/30 pt-2 text-xs">
+                      <div className="flex justify-between text-text-sub">
+                        <span>Товары</span>
+                        <span>{money(order.itemsTotal)} ₽</span>
+                      </div>
                       {order.discount > 0 && (
-                        <span className="text-xs text-primary">Скидка: −{order.discount.toLocaleString('ru-RU')} ₽</span>
+                        <div className="flex justify-between text-primary">
+                          <span>Скидка</span>
+                          <span>−{money(order.discount)} ₽</span>
+                        </div>
                       )}
-                      <span className="ml-auto text-sm font-bold text-text-main">
-                        {order.totalPrice.toLocaleString('ru-RU')} ₽
-                      </span>
+                      <div className="flex justify-between text-text-sub">
+                        <span>Доставка</span>
+                        <span>{order.deliveryPrice > 0 ? `${money(order.deliveryPrice)} ₽` : 'бесплатно'}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-pastel-sand/30 pt-1.5 text-sm font-bold text-text-main">
+                        <span>Итого</span>
+                        <span>{money(order.totalPrice)} ₽</span>
+                      </div>
                     </div>
 
                     {order.status !== 'DONE' && order.status !== 'CANCELLED' && (
-                      <div className="flex gap-1.5 flex-wrap">
-                        {STATUSES.filter((s) => s !== order.status).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => handleStatusChange(order.id, s)}
-                            disabled={updatingId === order.id}
-                            className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50 ${STATUS_COLORS[s]}`}
-                          >
-                            → {STATUS_LABELS[s]}
-                          </button>
-                        ))}
+                      <div className="flex flex-col gap-2">
+                        <input
+                          value={trackDrafts[order.id] ?? order.trackNumber ?? ''}
+                          onChange={(e) => setTrackDrafts({ ...trackDrafts, [order.id]: e.target.value })}
+                          placeholder="Трек-номер (уйдёт клиенту вместе со статусом)"
+                          className="w-full rounded-lg border border-line bg-pastel-ivory/50 px-3 py-2 text-xs outline-none focus:border-primary"
+                        />
+                        <div className="flex gap-1.5 flex-wrap">
+                          {STATUSES.filter((s) => s !== order.status).map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => handleStatusChange(order.id, s)}
+                              disabled={updatingId === order.id}
+                              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-2xs font-bold transition-all active:scale-95 disabled:opacity-50 ${STATUS_COLORS[s]}`}
+                            >
+                              <Icon name={STATUS_ICONS[s]} size={13} />
+                              {STATUS_LABELS[s]}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </motion.div>
@@ -551,18 +685,17 @@ export function Admin() {
           <button
             onClick={() => {
               setEditProductId(null);
-              setProductForm({ name: '', slug: '', description: '', price: '', category: 'Ароматические', topNote: '', heartNote: '', baseNote: '', imageUrl: '', inStock: true, isFeatured: false });
+              setProductForm({ name: '', slug: '', description: '', price: '', category: 'Ароматические', topNote: '', heartNote: '', baseNote: '', imageUrls: '', inStock: true, isFeatured: false });
               setShowProductForm(true);
             }}
             className="w-full mb-4 rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2"
           >
-            <span className="material-symbols-outlined text-[18px]">add</span> Добавить товар
+            <Icon name="add" size={18} /> Добавить товар
           </button>
 
           <div className="flex flex-col gap-3">
             {loading ? <div className="animate-pulse h-20 bg-white rounded-2xl" /> : products.map((p, idx) => {
-              let img = '';
-              try { img = JSON.parse(p.images)[0] || ''; } catch { /* ignore */ }
+              const img = p.images?.[0] || '';
               return (
                 <motion.div
                   key={p.id}
@@ -572,21 +705,26 @@ export function Admin() {
                   transition={{ delay: idx * 0.04 }}
                 >
                   <div className="size-14 flex-shrink-0 rounded-xl bg-pastel-sand/30 overflow-hidden">
-                    {img ? <img src={img} alt={p.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-pastel-ivory" />}
+                    {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full bg-pastel-ivory" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-bold text-text-main truncate">{p.name}</h4>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-text-sub">{(p.price).toLocaleString('ru-RU')} ₽</span>
-                      <span className="text-[10px] text-text-sub bg-pastel-ivory px-1.5 rounded">{p.category}</span>
+                      <span className="text-xs font-medium text-text-sub">{money(p.price)} ₽</span>
+                      <span className="text-2xs text-text-sub bg-pastel-ivory px-1.5 rounded">{p.category}</span>
+                      {p.images?.length > 1 && (
+                        <span className="text-2xs text-text-sub">{p.images.length} фото</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${p.inStock ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                      {p.inStock ? 'В наличии' : 'Нет'}
+                    <span className={`rounded-full px-2 py-0.5 text-2xs font-bold ${p.inStock ? 'bg-emerald-50 text-emerald-700' : 'bg-danger/10 text-danger'}`}>
+                      {p.inStock ? 'В наличии' : 'Скрыт'}
                     </span>
-                    <button onClick={() => openEditProduct(p)} className="text-[10px] font-bold text-primary uppercase mt-1">Редакт.</button>
-                    <button onClick={() => handleDeleteProduct(p.id)} className="text-[10px] font-bold text-red-400 uppercase">Удалить</button>
+                    <button onClick={() => openEditProduct(p)} className="text-2xs font-bold text-primary uppercase mt-1">Редакт.</button>
+                    {p.inStock && (
+                      <button onClick={() => handleDeleteProduct(p.id)} className="text-2xs font-bold text-danger uppercase">Скрыть</button>
+                    )}
                   </div>
                 </motion.div>
               );
@@ -602,7 +740,9 @@ export function Admin() {
             <motion.div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
               <div className="flex justify-between items-center mb-5">
                 <h3 className="font-display text-lg font-bold">Новый промокод</h3>
-                <button onClick={() => setShowPromoForm(false)} className="material-symbols-outlined text-text-sub">close</button>
+                <button onClick={() => setShowPromoForm(false)} className="text-text-sub" aria-label="Закрыть">
+                  <Icon name="close" size={20} />
+                </button>
               </div>
               <form onSubmit={handleCreatePromo} className="flex flex-col gap-4">
                 <div>
@@ -637,7 +777,9 @@ export function Admin() {
             <motion.div className="w-full max-h-[90vh] overflow-y-auto max-w-md rounded-t-3xl bg-white p-5 pb-8" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
               <div className="flex justify-between items-center mb-5 sticky top-0 bg-white z-10 pb-2 border-b border-pastel-sand/20">
                 <h3 className="font-display text-lg font-bold">{editProductId ? 'Редактировать товар' : 'Новый товар'}</h3>
-                <button type="button" onClick={() => setShowProductForm(false)} className="material-symbols-outlined text-text-sub">close</button>
+                <button type="button" onClick={() => setShowProductForm(false)} className="text-text-sub" aria-label="Закрыть">
+                  <Icon name="close" size={20} />
+                </button>
               </div>
               <form onSubmit={handleSaveProduct} className="flex flex-col gap-4">
                 <div>
@@ -659,20 +801,27 @@ export function Admin() {
                   <textarea required value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} rows={3} className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-text-sub uppercase mb-1 block">URL фото (например, /images/candle_1.jpg)</label>
-                  <input value={productForm.imageUrl} onChange={e => setProductForm({...productForm, imageUrl: e.target.value})} className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
+                  <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Фото — по одной ссылке в строке (до 10)</label>
+                  <textarea
+                    value={productForm.imageUrls}
+                    onChange={e => setProductForm({...productForm, imageUrls: e.target.value})}
+                    rows={3}
+                    placeholder={'/images/candle_1.jpg\nhttps://…/candle_2.webp'}
+                    className="w-full rounded-xl bg-pastel-ivory/50 p-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <p className="mt-1 text-2xs text-text-sub">Первая — обложка в каталоге, остальные попадут в галерею товара.</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[10px] font-bold text-text-sub uppercase mb-1 block">Верхняя нота</label>
+                    <label className="text-2xs font-bold text-text-sub uppercase mb-1 block">Верхняя нота</label>
                     <input value={productForm.topNote} onChange={e => setProductForm({...productForm, topNote: e.target.value})} className="w-full rounded-lg bg-pastel-ivory/50 p-2 text-xs outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-text-sub uppercase mb-1 block">Сердце</label>
+                    <label className="text-2xs font-bold text-text-sub uppercase mb-1 block">Сердце</label>
                     <input value={productForm.heartNote} onChange={e => setProductForm({...productForm, heartNote: e.target.value})} className="w-full rounded-lg bg-pastel-ivory/50 p-2 text-xs outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-text-sub uppercase mb-1 block">База</label>
+                    <label className="text-2xs font-bold text-text-sub uppercase mb-1 block">База</label>
                     <input value={productForm.baseNote} onChange={e => setProductForm({...productForm, baseNote: e.target.value})} className="w-full rounded-lg bg-pastel-ivory/50 p-2 text-xs outline-none" />
                   </div>
                 </div>
@@ -698,7 +847,7 @@ export function Admin() {
         <div className="px-4 pt-4">
           <div className="rounded-2xl bg-white p-5 shadow-sm border border-pastel-sand/20">
             <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-2xl text-primary">campaign</span>
+              <Icon name="megaphone" size={24} className="text-primary" />
               <h3 className="font-display text-lg font-bold text-text-main">Рассылка</h3>
             </div>
             <p className="text-xs text-text-sub mb-4">Сообщение будет отправлено всем пользователям, которые запустили бота. Поддерживается *жирный*, _курсив_.</p>
@@ -721,15 +870,15 @@ export function Admin() {
                 <div className="grid grid-cols-3 gap-2 text-center mt-2">
                   <div>
                     <p className="text-xl font-bold text-text-main">{broadcastResult.total}</p>
-                    <p className="text-[10px] text-text-sub">Всего</p>
+                    <p className="text-2xs text-text-sub">Всего</p>
                   </div>
                   <div>
                     <p className="text-xl font-bold text-emerald-600">{broadcastResult.successCount}</p>
-                    <p className="text-[10px] text-text-sub">Доставлено</p>
+                    <p className="text-2xs text-text-sub">Доставлено</p>
                   </div>
                   <div>
                     <p className="text-xl font-bold text-red-500">{broadcastResult.failCount}</p>
-                    <p className="text-[10px] text-text-sub">Ошибок</p>
+                    <p className="text-2xs text-text-sub">Ошибок</p>
                   </div>
                 </div>
               </motion.div>
@@ -743,15 +892,17 @@ export function Admin() {
               {isBroadcasting ? (
                 <>
                   <motion.span
-                    className="material-symbols-outlined text-[18px]"
+                    className="inline-flex"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  >progress_activity</motion.span>
+                  >
+                    <Icon name="spinner" size={18} />
+                  </motion.span>
                   Отправка...
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  <Icon name="send" size={18} />
                   Отправить всем
                 </>
               )}
@@ -765,7 +916,7 @@ export function Admin() {
         <div className="px-4 pt-4">
           <div className="rounded-2xl bg-white p-5 shadow-sm border border-pastel-sand/20">
             <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-2xl text-primary">send_to_mobile</span>
+              <Icon name="smartphone" size={24} className="text-primary" />
               <h3 className="font-display text-lg font-bold text-text-main">Пост в канал</h3>
             </div>
             <p className="text-xs text-text-sub mb-4">Опубликуйте пост с кнопкой, которая сразу откроет Web App.</p>
@@ -842,15 +993,17 @@ export function Admin() {
               {isChannelPosting ? (
                 <>
                   <motion.span
-                    className="material-symbols-outlined text-[18px]"
+                    className="inline-flex"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  >progress_activity</motion.span>
+                  >
+                    <Icon name="spinner" size={18} />
+                  </motion.span>
                   Публикация...
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  <Icon name="send" size={18} />
                   Опубликовать
                 </>
               )}

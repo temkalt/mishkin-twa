@@ -1,25 +1,29 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Icon } from './Icon';
 
 const STORAGE_KEY = 'mishkin_subscribed';
+/** Когда истекает «возможно, позже». Без этого попап всплывал при каждом входе. */
+const SNOOZE_KEY = 'mishkin_subscribe_snoozed_until';
+const SNOOZE_DAYS = 7;
 
 export function SubscriptionPopup() {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // Only show if user has never clicked "Subscribe"
-    const hasSubscribed = localStorage.getItem(STORAGE_KEY);
+    if (localStorage.getItem(STORAGE_KEY)) return;
 
-    if (!hasSubscribed) {
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+    const snoozedUntil = Number(localStorage.getItem(SNOOZE_KEY) || 0);
+    if (snoozedUntil > Date.now()) return;
+
+    // 2 секунды — это поверх ещё не осмотренного каталога. Даём успеть
+    // осмотреться, прежде чем что-то просить.
+    const timer = setTimeout(() => setIsOpen(true), 6000);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleDismiss = () => {
-    // Just close for now — will show again on next visit
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_DAYS * 24 * 60 * 60 * 1000));
     setIsOpen(false);
   };
 
@@ -53,15 +57,16 @@ export function SubscriptionPopup() {
             exit={{ scale: 0.95, y: 10, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
-            <button 
+            <button
               onClick={handleDismiss}
               className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full bg-pastel-sand/50 text-text-main transition-colors hover:bg-pastel-sand"
+              aria-label="Закрыть"
             >
-              <span className="material-symbols-outlined text-[18px]">close</span>
+              <Icon name="close" size={18} />
             </button>
-            
+
             <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <span className="material-symbols-outlined text-[24px]">notifications_active</span>
+              <Icon name="notifications" size={24} />
             </div>
             
             <h3 className="mb-2 font-display text-xl font-bold text-text-main">

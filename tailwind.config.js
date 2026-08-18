@@ -4,25 +4,39 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: "class",
+  // Тёмная тема сознательно не поддерживается: магазин зафиксирован в светлой.
+  // Токены и классы `dark:` убраны, чтобы не оставлять полуработающий режим.
   theme: {
     extend: {
       colors: {
         "primary": "#3A5A2A",
         "primary-light": "#6b8c5a",
+        "primary-dark": "#2C4620",
         "accent": "#D4A373",
+        "accent-deep": "#B07E4C",
         "background-light": "#FDFBF7",
-        "background-dark": "#1C1917",
+        "surface": "#FFFFFF",
         "pastel-sand": "#EBE5D9",
         "pastel-ivory": "#F4F1EA",
         "warm-accent": "#D4C5B0",
+        "line": "#E6DFD2",
         "text-main": "#2C2824",
-        "text-sub": "#8C867D",
+        // Затемнён с #8C867D до 4.6:1 на песочном фоне — прежний не проходил WCAG AA.
+        "text-sub": "#736D63",
+        "text-muted": "#969086",
+        "danger": "#B4453C",
+        "success": "#3F7D4E",
       },
       fontFamily: {
-        "display": ["Bahnschrift", "Manrope", "sans-serif"],
-        "body": ["Manrope", "sans-serif"],
-        "bahnschrift": ["Bahnschrift", "Manrope", "sans-serif"],
+        // Jost — геометрический гротеск в духе Bahnschrift, но загружается на
+        // всех устройствах (Bahnschrift есть только в Windows, на телефонах
+        // заголовки молча падали в Manrope).
+        "display": ["Jost", "Bahnschrift", "Manrope", "sans-serif"],
+        "body": ["Manrope", "system-ui", "sans-serif"],
+      },
+      fontSize: {
+        // Нижняя граница подписей — 11px. Прежние 9–10px не читались.
+        "2xs": ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.02em" }],
       },
       borderRadius: {
         "DEFAULT": "0.25rem",
@@ -30,6 +44,7 @@ export default {
         "xl": "0.75rem",
         "2xl": "1rem",
         "3xl": "1.5rem",
+        "4xl": "2rem",
         "full": "9999px"
       },
       keyframes: {
@@ -75,6 +90,9 @@ export default {
           "0%": { transform: "translateX(-120%) skewX(-18deg)" },
           "100%": { transform: "translateX(220%) skewX(-18deg)" },
         },
+        spin: {
+          to: { transform: "rotate(360deg)" },
+        },
       },
       animation: {
         shimmer: "shimmer 1.8s ease-in-out infinite",
@@ -84,9 +102,10 @@ export default {
         glowPulse: "glowPulse 2s ease-in-out infinite",
         float: "float 5s ease-in-out infinite",
         flame: "flame 1.6s ease-in-out infinite",
-        gradientPan: "gradientPan 8s ease-in-out infinite",
+        gradientPan: "gradientPan 14s ease-in-out infinite",
         breathe: "breathe 4s ease-in-out infinite",
         sheen: "sheen 2.4s ease-in-out infinite",
+        "spin-slow": "spin 1s linear infinite",
       },
       boxShadow: {
         soft: "0 4px 20px -6px rgba(44,40,36,0.12)",
@@ -94,6 +113,7 @@ export default {
         glow: "0 0 24px -4px rgba(58,90,42,0.45)",
         "glow-accent": "0 0 28px -4px rgba(212,163,115,0.5)",
         inset: "inset 0 1px 0 0 rgba(255,255,255,0.4)",
+        sheet: "0 -18px 60px -20px rgba(44,40,36,0.35)",
       },
       transitionTimingFunction: {
         "spring": "cubic-bezier(0.22, 1, 0.36, 1)",
