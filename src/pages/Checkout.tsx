@@ -427,16 +427,26 @@ export function Checkout() {
             </div>
           </div>
 
-          {/* Согласие на обработку ПДн — собираем имя, телефон и адрес (152-ФЗ) */}
-          <label className="mt-4 flex cursor-pointer items-start gap-3">
+          {/*
+            Согласие на обработку ПДн (152-ФЗ). Раньше это был <label> с
+            галочкой-<span> внутри: нажатие на текст ничего не переключало
+            (label ни к какому input не привязан), а попадание по ссылке уводило
+            в документы — поставить галочку удавалось только точно по квадратику
+            20×20. Теперь вся строка — одна кнопка-чекбокс, а документы открывает
+            отдельная ссылка ниже.
+          */}
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={consent}
+            aria-label="Согласен с условиями и обработкой персональных данных"
+            onClick={() => { haptic.toggle(); setConsent((v) => !v); setErrors((p) => ({ ...p, consent: undefined })); }}
+            className="mt-4 flex w-full items-start gap-3 py-1 text-left"
+          >
             <span
               className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
                 consent ? 'border-primary bg-primary text-white' : errors.consent ? 'border-danger' : 'border-line'
               }`}
-              onClick={() => { haptic.toggle(); setConsent((v) => !v); setErrors((p) => ({ ...p, consent: undefined })); }}
-              role="checkbox"
-              aria-checked={consent}
-              tabIndex={0}
             >
               <AnimatePresence>
                 {consent && (
@@ -447,16 +457,16 @@ export function Checkout() {
               </AnimatePresence>
             </span>
             <span className="text-2xs leading-relaxed text-text-sub">
-              Соглашаюсь с{' '}
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); navigate('/legal'); }}
-                className="font-semibold text-primary underline"
-              >
-                условиями и обработкой персональных данных
-              </button>
+              Соглашаюсь с условиями продажи и обработкой персональных данных
             </span>
-          </label>
+          </button>
+          <button
+            type="button"
+            onClick={() => { haptic.tap(); navigate('/legal'); }}
+            className="mt-1 pl-8 text-2xs font-semibold text-primary underline"
+          >
+            Прочитать документы
+          </button>
           {errors.consent && (
             <p className="mt-1.5 pl-8 text-2xs text-danger">{errors.consent}</p>
           )}
