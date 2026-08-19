@@ -12,7 +12,6 @@ import { EASE_OUT, spring, staggerContainer, fadeUp } from '../utils/motion';
 import { formatPhone, isValidPhone, isValidPostal, phoneToE164 } from '../utils/phone';
 import type {
   OrderResponse,
-  PaymentStartResponse,
   PaymentType,
   PromoValidateResponse,
 } from '../utils/types';
@@ -143,24 +142,11 @@ export function Checkout() {
       localStorage.setItem('mishkin_last_order', String(order.id));
 
       if (paymentType === 'ONLINE') {
-        try {
-          const started = await api.post<PaymentStartResponse>('/payments/create', { orderId: order.id });
-          haptic.press();
-          // Оплату открываем во внешнем браузере: 3-D Secure и приложения банков
-          // внутри Mini App не работают.
-          if (WebApp.initData && WebApp.openLink) WebApp.openLink(started.confirmationUrl);
-          else window.location.href = started.confirmationUrl;
-
-          navigate(`/order/${order.id}`, { replace: true, state: { awaitingPayment: true } });
-          return;
-        } catch (paymentError) {
-          // Заказ уже создан — не теряем его, ведём на экран заказа с возможностью оплатить снова.
-          navigate(`/order/${order.id}`, {
-            replace: true,
-            state: { paymentError: (paymentError as Error).message },
-          });
-          return;
-        }
+        // Сам платёж запускает экран заказа: он живёт по устойчивому адресу,
+        // умеет и форму внутри Mini App, и возврат из браузера, и повторную
+        // попытку. Дублировать эту развилку в чекауте нечего.
+        navigate(`/order/${order.id}`, { replace: true, state: { autoPay: true } });
+        return;
       }
 
       haptic.celebrate();
@@ -180,7 +166,7 @@ export function Checkout() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light px-4 pb-40 pt-6"
+      className="flex min-h-screen flex-col bg-background-light px-4 pb-bar-safe-lg pt-[calc(var(--app-top)+1.5rem)]"
       initial={{ opacity: 0, x: 24 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -24 }}
@@ -474,7 +460,7 @@ export function Checkout() {
       </motion.div>
 
       {/* ===== ЗАКРЕПЛЁННАЯ КНОПКА ===== */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 glass-nav border-t border-white/50 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3">
+      <div className="action-bar">
         <div className="mx-auto max-w-lg">
           <AnimatePresence>
             {serverError && (

@@ -139,14 +139,22 @@ paymentsRouter.get('/config', (_req, res) => {
   });
 });
 
-/** POST /api/payments/create — получить ссылку на оплату заказа. */
+/**
+ * POST /api/payments/create — начать оплату заказа.
+ *
+ * По умолчанию отдаёт `confirmationToken` для виджета — форма рисуется внутри
+ * Mini App. `{ mode: 'redirect' }` вернёт ссылку на страницу ЮKassa: нужно
+ * эмулятору и оплате вне Telegram.
+ */
 paymentsRouter.post('/create', async (req, res) => {
   try {
-    const orderId = Number((req.body || {}).orderId);
+    const body = (req.body || {}) as { orderId?: unknown; mode?: unknown };
+    const orderId = Number(body.orderId);
     if (!Number.isInteger(orderId) || orderId <= 0) {
       res.status(400).json({ error: 'Некорректный orderId' });
       return;
     }
+    const mode = body.mode === 'redirect' ? 'redirect' : 'embedded';
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
@@ -158,7 +166,7 @@ paymentsRouter.post('/create', async (req, res) => {
       return;
     }
 
-    const result = await startPaymentForOrder(orderId);
+    const result = await startPaymentForOrder(orderId, mode);
     res.json(result);
   } catch (error: any) {
     console.error('[payments] создание платежа:', error);

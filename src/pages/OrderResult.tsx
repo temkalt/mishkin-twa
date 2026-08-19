@@ -5,6 +5,7 @@ import { WebApp } from '../utils/telegram';
 import { api } from '../utils/api';
 import { haptic } from '../utils/haptics';
 import { Icon } from '../components/Icon';
+import { PaymentWidget } from '../components/PaymentWidget';
 import { EASE_OUT, spring } from '../utils/motion';
 import type { PaymentStartResponse, PaymentStatusResponse } from '../utils/types';
 
@@ -21,10 +22,12 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 /**
- * Экран заказа: ждёт оплату, показывает результат и позволяет оплатить снова.
+ * Экран заказа: запускает оплату, ждёт её и показывает результат.
  *
- * Адрес /order/:id намеренно устойчивый — пользователь уходит платить во
- * внешний браузер, и Telegram возвращает его сюда по deep-link, даже если
+ * Здесь единственная точка запуска платежа — чекаут только приводит сюда с
+ * `state.autoPay`. Так вся развилка «виджет или страница ЮKassa» живёт в одном
+ * месте, а адрес /order/:id остаётся устойчивым: если оплата всё же ушла во
+ * внешний браузер, Telegram вернёт пользователя сюда по deep-link, даже когда
  * приложение за это время закрылось.
  */
 export function OrderResult() {
@@ -36,12 +39,16 @@ export function OrderResult() {
   const [data, setData] = useState<PaymentStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [payError, setPayError] = useState<string>(
-    (location.state as { paymentError?: string } | null)?.paymentError || '',
-  );
+  const [payError, setPayError] = useState('');
   const [retrying, setRetrying] = useState(false);
   const [pollExpired, setPollExpired] = useState(false);
+  /** Непустой токен = показываем форму оплаты поверх страницы. */
+  const [widgetToken, setWidgetToken] = useState('');
   const celebrated = useRef(false);
+  // Защита от двойного запуска: state-флаг для этого не годится, он приходит
+  // на следующий рендер, а автозапуск и тап по кнопке могут случиться подряд.
+  const paying = useRef(false);
+  const autoPayDone = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -81,31 +88,87 @@ export function OrderResult() {
   }, [data?.paymentStatus, fetchStatus]);
 
   useEffect(() => {
-    if (data?.paymentStatus === 'PAID' && !celebrated.current) {
+    if (data?.paymentStatus !== 'PAID') return;
+    // Оплата подтверждена сервером — форма больше не нужна, даже если её
+    // закрыл вебхук, а не пользователь.
+    setWidgetToken('');
+    if (!celebrated.current) {
       celebrated.current = true;
       haptic.celebrate();
       localStorage.removeItem('mishkin_last_order');
     }
   }, [data?.paymentStatus]);
 
-  const payAgain = async () => {
-    if (retrying) return;
+  /**
+   * Запускает оплату заказа.
+   *
+   * По умолчанию сервер отдаёт токен виджета — форма открывается здесь же.
+   * `mode = 'redirect'` просит ссылку на страницу ЮKassa: это откат, если
+   * виджет не поднялся, и единственный путь в режиме эмулятора.
+   */
+  const startPayment = useCallback(async (mode?: 'redirect') => {
+    if (paying.current) return;
+    paying.current = true;
     setRetrying(true);
     setPayError('');
     try {
-      const started = await api.post<PaymentStartResponse>('/payments/create', { orderId });
+      const started = await api.post<PaymentStartResponse>('/payments/create', {
+        orderId,
+        ...(mode ? { mode } : {}),
+      });
       haptic.press();
-      if (WebApp.initData && WebApp.openLink) WebApp.openLink(started.confirmationUrl);
-      else window.location.href = started.confirmationUrl;
+
+      if (started.confirmationToken) {
+        setWidgetToken(started.confirmationToken);
+      } else if (started.confirmationUrl) {
+        // Страницу оплаты открываем во внешнем браузере: 3-D Secure и
+        // приложения банков внутри Mini App не работают.
+        if (WebApp.initData && WebApp.openLink) WebApp.openLink(started.confirmationUrl);
+        else window.location.href = started.confirmationUrl;
+      } else {
+        throw new Error('Сервер не вернул способ оплаты');
+      }
+
       setPollExpired(false);
       await fetchStatus();
     } catch (err) {
       setPayError((err as Error).message || 'Не удалось открыть оплату');
       haptic.error();
     } finally {
+      paying.current = false;
       setRetrying(false);
     }
-  };
+  }, [orderId, fetchStatus]);
+
+  // Из чекаута приходим уже готовыми платить — второго нажатия не просим.
+  useEffect(() => {
+    if (autoPayDone.current) return;
+    if (!(location.state as { autoPay?: boolean } | null)?.autoPay) return;
+    if (!Number.isInteger(orderId) || orderId <= 0) return;
+    autoPayDone.current = true;
+    void startPayment();
+  }, [location.state, orderId, startPayment]);
+
+  const closeWidget = useCallback(() => setWidgetToken(''), []);
+
+  const handleWidgetSuccess = useCallback(() => {
+    setWidgetToken('');
+    // Событие виджета — не доказательство оплаты, статус берём с сервера.
+    void fetchStatus();
+  }, [fetchStatus]);
+
+  const handleWidgetFail = useCallback(() => {
+    setWidgetToken('');
+    setPayError('Оплата не прошла. Деньги не списаны — можно попробовать снова.');
+    haptic.error();
+    void fetchStatus();
+  }, [fetchStatus]);
+
+  const handleWidgetUnavailable = useCallback((reason: string) => {
+    setWidgetToken('');
+    console.warn('[payments] форма не открылась, уходим на страницу ЮKassa:', reason);
+    void startPayment('redirect');
+  }, [startPayment]);
 
   if (loading) {
     return (
@@ -140,8 +203,9 @@ export function OrderResult() {
   const isManual = data.paymentType === 'MANUAL';
 
   return (
+    <>
     <motion.div
-      className="mesh-bg grain flex min-h-screen flex-col items-center justify-center px-6 py-10 text-center"
+      className="mesh-bg grain flex min-h-screen flex-col items-center justify-center px-6 pb-[calc(2.5rem+var(--safe-bottom))] pt-[calc(var(--app-top)+2.5rem)] text-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -217,7 +281,7 @@ export function OrderResult() {
           ? 'Менеджер свяжется с вами, чтобы согласовать оплату и доставку.'
           : pollExpired
           ? 'Мы перестали проверять автоматически. Нажмите «Проверить оплату», если платёж прошёл.'
-          : 'Завершите оплату в открывшемся окне — статус обновится здесь автоматически.'}
+          : 'Завершите оплату — статус обновится здесь автоматически.'}
       </motion.p>
 
       {/* ===== ОШИБКА ЗАПУСКА ОПЛАТЫ ===== */}
@@ -240,14 +304,14 @@ export function OrderResult() {
           <motion.button
             className="btn-primary"
             whileTap={{ scale: 0.98 }}
-            onClick={() => { haptic.press(); void payAgain(); }}
+            onClick={() => { haptic.press(); void startPayment(); }}
             disabled={retrying}
           >
             <span className="relative flex items-center justify-center gap-2">
               {retrying ? (
                 <><Icon name="spinner" size={18} className="animate-spin-slow" /> Открываем…</>
               ) : (
-                <><Icon name="card" size={18} /> {isFailed ? 'Оплатить снова' : 'Открыть оплату'}</>
+                <><Icon name="card" size={18} /> {isFailed ? 'Оплатить снова' : 'Оплатить'}</>
               )}
             </span>
           </motion.button>
@@ -277,5 +341,22 @@ export function OrderResult() {
         </button>
       </div>
     </motion.div>
+
+    {/* Форма ЮKassa поверх страницы: опрос статуса под ней продолжается. */}
+    <AnimatePresence>
+      {widgetToken && (
+        <PaymentWidget
+          key={widgetToken}
+          token={widgetToken}
+          orderId={data.orderId}
+          amount={data.totalPrice}
+          onSuccess={handleWidgetSuccess}
+          onFail={handleWidgetFail}
+          onUnavailable={handleWidgetUnavailable}
+          onClose={closeWidget}
+        />
+      )}
+    </AnimatePresence>
+    </>
   );
 }

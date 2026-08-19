@@ -72,7 +72,10 @@ function buildReceipt(order: { userPhone: string; items: string; totalPrice: num
 
 export interface StartPaymentResult {
   paymentId: string;
-  confirmationUrl: string;
+  /** Токен инициализации виджета — основной путь (оплата внутри Mini App). */
+  confirmationToken?: string;
+  /** Ссылка на страницу оплаты — эмулятор и запрошенный явно redirect. */
+  confirmationUrl?: string;
   status: OrderPaymentStatus;
   mock: boolean;
   test: boolean;
@@ -80,10 +83,21 @@ export interface StartPaymentResult {
 }
 
 /**
- * Создаёт (или переиспользует) платёж по заказу и возвращает ссылку на оплату.
- * Повторный вызов по заказу с живым платежом не создаёт второй платёж.
+ * Создаёт (или переиспользует) платёж по заказу.
+ *
+ * По умолчанию делает embedded-платёж: возвращает `confirmationToken`, по
+ * которому приложение рисует форму ЮKassa у себя — пользователь не покидает
+ * Telegram. `redirect` оставлен для эмулятора и оплаты вне Mini App.
+ *
+ * Повторный вызов по заказу с живым платежом не создаёт второй платёж, если
+ * прежний ещё можно показать. Если показать нельзя (для embedded ЮKassa не
+ * отдаёт токен повторно), старый платёж отменяется и создаётся новый — деньги
+ * при этом не задваиваются: незавершённый платёж списанием не является.
  */
-export async function startPaymentForOrder(orderId: number): Promise<StartPaymentResult> {
+export async function startPaymentForOrder(
+  orderId: number,
+  confirmation: yoo.ConfirmationType = 'embedded',
+): Promise<StartPaymentResult> {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw Object.assign(new Error('Заказ не найден'), { status: 404 });
   if (order.paymentStatus === 'PAID') {
@@ -93,24 +107,42 @@ export async function startPaymentForOrder(orderId: number): Promise<StartPaymen
     throw Object.assign(new Error('Нулевая сумма — оплата не требуется'), { status: 400 });
   }
 
-  // Живой платёж переиспользуем, чтобы двойной тап не создал два списания.
+  const wantEmbedded = confirmation === 'embedded' && !yoo.isMockMode();
+
+  // Живой платёж переиспользуем, чтобы двойной вызов не плодил платежи.
   if (order.paymentId && order.paymentStatus === 'PENDING') {
     const existing = await readPayment(order.paymentId, order.totalPrice);
-    if (existing && existing.status === 'PENDING' && existing.confirmationUrl) {
+    const reusable = existing?.status === 'PENDING'
+      && Boolean(wantEmbedded ? existing.confirmationToken : existing.confirmationUrl);
+
+    if (reusable) {
       return {
         paymentId: order.paymentId,
-        confirmationUrl: existing.confirmationUrl,
+        confirmationToken: wantEmbedded ? existing!.confirmationToken : undefined,
+        confirmationUrl: wantEmbedded ? undefined : existing!.confirmationUrl,
         status: 'PENDING',
         mock: yoo.isMockMode(),
         test: yoo.isTestShop(),
         amount: order.totalPrice / 100,
       };
     }
+
+    // Показать прежний платёж нечем — отменяем, чтобы не оставлять висящий
+    // pending в кабинете ЮKassa. Ошибку отмены не считаем фатальной.
+    if (existing?.status === 'PENDING' && !order.paymentId.startsWith('mock-')) {
+      try {
+        await yoo.cancelPayment(order.paymentId, randomUUID());
+        console.log(`[payments] заказ #${order.id}: прежний платёж ${order.paymentId} отменён перед новым`);
+      } catch (error) {
+        console.warn('[payments] не удалось отменить прежний платёж', order.paymentId, error);
+      }
+    }
   }
 
   const description = `Заказ №${order.id} · MISHKIN`;
   let paymentId: string;
-  let confirmationUrl: string;
+  let confirmationUrl: string | undefined;
+  let confirmationToken: string | undefined;
 
   if (yoo.isMockMode()) {
     paymentId = `mock-${randomUUID()}`;
@@ -119,16 +151,25 @@ export async function startPaymentForOrder(orderId: number): Promise<StartPaymen
     const payment = await yoo.createPayment({
       amountKopecks: order.totalPrice,
       description,
-      returnUrl: buildReturnUrl(order.id),
+      confirmation: wantEmbedded ? 'embedded' : 'redirect',
+      returnUrl: wantEmbedded ? undefined : buildReturnUrl(order.id),
       idempotenceKey: randomUUID(),
       metadata: { orderId: String(order.id) },
       receipt: buildReceipt(order),
       paymentMethodType: process.env.YOOKASSA_PAYMENT_METHOD || undefined,
     });
     paymentId = payment.id;
-    confirmationUrl = payment.confirmation?.confirmation_url || '';
-    if (!confirmationUrl) {
-      throw Object.assign(new Error('ЮKassa не вернула ссылку на оплату'), { status: 502 });
+
+    if (wantEmbedded) {
+      confirmationToken = payment.confirmation?.confirmation_token;
+      if (!confirmationToken) {
+        throw Object.assign(new Error('ЮKassa не вернула токен для формы оплаты'), { status: 502 });
+      }
+    } else {
+      confirmationUrl = payment.confirmation?.confirmation_url;
+      if (!confirmationUrl) {
+        throw Object.assign(new Error('ЮKassa не вернула ссылку на оплату'), { status: 502 });
+      }
     }
   }
 
@@ -139,6 +180,7 @@ export async function startPaymentForOrder(orderId: number): Promise<StartPaymen
 
   return {
     paymentId,
+    confirmationToken,
     confirmationUrl,
     status: 'PENDING',
     mock: yoo.isMockMode(),
@@ -150,6 +192,7 @@ export async function startPaymentForOrder(orderId: number): Promise<StartPaymen
 interface ReadPaymentResult {
   status: OrderPaymentStatus;
   confirmationUrl?: string;
+  confirmationToken?: string;
   methodType?: string;
   amountKopecks?: number;
 }
@@ -175,6 +218,7 @@ async function readPayment(paymentId: string, _expectedKopecks: number): Promise
     return {
       status: mapYooStatus(payment.status),
       confirmationUrl: payment.confirmation?.confirmation_url,
+      confirmationToken: payment.confirmation?.confirmation_token,
       methodType: payment.payment_method?.type,
       amountKopecks: yoo.fromAmountValue(payment.amount.value),
     };

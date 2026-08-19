@@ -113,7 +113,10 @@ export interface PaymentConfig {
 
 export interface PaymentStartResponse {
   paymentId: string;
-  confirmationUrl: string;
+  /** Токен виджета — основной путь: форма рисуется внутри Mini App. */
+  confirmationToken?: string;
+  /** Ссылка на страницу оплаты — эмулятор и явно запрошенный redirect. */
+  confirmationUrl?: string;
   status: PaymentStatus;
   mock: boolean;
   test: boolean;

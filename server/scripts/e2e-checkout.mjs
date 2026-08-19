@@ -156,6 +156,12 @@ try {
       ? `${payment.json.amount} ₽, mock=${payment.json.mock}`
       : `HTTP ${payment.status}: ${JSON.stringify(payment.json).slice(0, 200)}`);
 
+  // В эмуляторе платёж всегда redirect: клиенту нужна ссылка, а не токен
+  // виджета. Проверяем явно — фронт выбирает путь именно по этим полям.
+  check('эмулятор вернул ссылку на оплату, а не токен виджета',
+    Boolean(payment.json.confirmationUrl) && !payment.json.confirmationToken,
+    `url=${Boolean(payment.json.confirmationUrl)}, token=${Boolean(payment.json.confirmationToken)}`);
+
   const beforePay = await get(`/payments/status/${order.id}`);
   check('до оплаты статус PENDING', beforePay.json.paymentStatus === 'PENDING');
 

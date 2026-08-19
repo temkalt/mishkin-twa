@@ -9,12 +9,20 @@
 //
 // Режим выбирается автоматически: если ключей нет — включается эмулятор.
 // Принудительно: YOOKASSA_MODE=mock | real.
+//
+// Подтверждение платежа бывает двух видов:
+//   embedded — ЮKassa отдаёт confirmation_token, форма рисуется виджетом прямо
+//              в Mini App. Основной путь: пользователь не выходит из Telegram.
+//   redirect — ЮKassa отдаёт ссылку на свою страницу оплаты. Остался для
+//              сценариев вне Mini App и для эмулятора.
 
 import { randomUUID } from 'crypto';
 
 const API_BASE = 'https://api.yookassa.ru/v3';
 
 export type PaymentStatus = 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled';
+
+export type ConfirmationType = 'embedded' | 'redirect';
 
 export interface YooAmount {
   value: string;
@@ -30,7 +38,12 @@ export interface YooPayment {
   test?: boolean;
   metadata?: Record<string, string>;
   payment_method?: { type?: string; title?: string };
-  confirmation?: { type: string; confirmation_url?: string };
+  confirmation?: {
+    type: string;
+    confirmation_url?: string;
+    /** Для type = embedded: токен инициализации виджета. */
+    confirmation_token?: string;
+  };
   cancellation_details?: { party?: string; reason?: string };
   created_at?: string;
 }
@@ -140,20 +153,33 @@ async function call<T>(
 export interface CreatePaymentInput {
   amountKopecks: number;
   description: string;
-  returnUrl: string;
+  /** Куда вернуть пользователя. Нужен только для confirmation = redirect. */
+  returnUrl?: string;
   /** Ключ идемпотентности — один и тот же заказ не создаст два платежа. */
   idempotenceKey: string;
   metadata?: Record<string, string>;
   receipt?: { customer: { phone?: string; email?: string }; items: ReceiptItem[] };
   /** Ограничить способ оплаты, например 'sbp'. По умолчанию — выбор на стороне ЮKassa. */
   paymentMethodType?: string;
+  /** embedded — форма в приложении (по умолчанию), redirect — страница ЮKassa. */
+  confirmation?: ConfirmationType;
 }
 
 export async function createPayment(input: CreatePaymentInput): Promise<YooPayment> {
+  const type: ConfirmationType = input.confirmation ?? 'embedded';
+  if (type === 'redirect' && !input.returnUrl) {
+    throw new YooKassaError('Для confirmation = redirect нужен returnUrl', 500);
+  }
+
   const body: Record<string, unknown> = {
     amount: { value: toAmountValue(input.amountKopecks), currency: 'RUB' },
     capture: true, // одностадийный платёж: деньги списываются сразу
-    confirmation: { type: 'redirect', return_url: input.returnUrl },
+    // Виджет сам показывает результат и отдаёт события, поэтому return_url ему
+    // не передаём — иначе ЮKassa увела бы пользователя из Mini App.
+    confirmation:
+      type === 'embedded'
+        ? { type: 'embedded' }
+        : { type: 'redirect', return_url: input.returnUrl },
     description: input.description.slice(0, 128),
   };
   if (input.metadata) body.metadata = input.metadata;
