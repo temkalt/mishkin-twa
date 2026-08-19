@@ -43,7 +43,7 @@ export function Home() {
 
   const heroProduct = featured[0];
   const bestsellers = featured.length > 0 ? featured : products.slice(0, 4);
-  const limited = products.filter((p) => p.category === 'Лимитированные');
+  const limited = products.filter((p) => p.isFeatured && p.id !== heroProduct?.id).slice(0, 3);
   const nothingLoaded = !isLoading && products.length === 0 && featured.length === 0;
 
   return (

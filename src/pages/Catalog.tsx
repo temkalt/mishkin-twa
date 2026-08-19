@@ -51,25 +51,16 @@ function plural(count: number): string {
 
 export function Catalog() {
   const navigate = useNavigate();
-  const { products, categories, isLoading, error, fetchProducts, fetchCategories } = useProductStore();
+  const { products, isLoading, error, fetchProducts } = useProductStore();
   const addItem = useCartStore((s) => s.addItem);
 
-  const [activeCategory, setActiveCategory] = useState('Все');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [addedId, setAddedId] = useState<number | null>(null);
 
   useEffect(() => {
-    void fetchCategories();
     void fetchProducts();
-  }, [fetchCategories, fetchProducts]);
-
-  const handleCategoryChange = (cat: string) => {
-    if (cat === activeCategory) return;
-    haptic.select();
-    setActiveCategory(cat);
-    void fetchProducts(cat);
-  };
+  }, [fetchProducts]);
 
   const handleAddToCart = (e: React.MouseEvent, product: typeof products[0]) => {
     e.stopPropagation();
@@ -98,7 +89,6 @@ export function Catalog() {
     ? products.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query) ||
           p.description.toLowerCase().includes(query),
       )
     : products;
@@ -112,7 +102,7 @@ export function Catalog() {
       transition={{ duration: 0.2 }}
     >
       <header className="glass-nav sticky top-0 z-header px-5 pb-3 pt-[calc(var(--app-top)+1.25rem)]">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <motion.button
               onClick={() => { haptic.tap(); navigate(-1); }}
@@ -145,45 +135,20 @@ export function Catalog() {
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.22, ease: EASE_OUT }}
-              className="overflow-hidden"
+              className="overflow-hidden pt-3"
             >
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск по названию или декору…"
+                placeholder="Поиск по названию или описанию…"
                 aria-label="Поиск по каталогу"
                 autoFocus
-                className="field mb-3 !py-3 text-sm"
+                className="field !py-3 text-sm"
               />
             </motion.div>
           )}
         </AnimatePresence>
-
-        <div className="h-scroll -mx-5 gap-2 px-5 pb-1.5 pt-1">
-          {categories.map((cat) => {
-            const isActive = activeCategory === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => handleCategoryChange(cat)}
-                aria-pressed={isActive}
-                className="relative whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold"
-              >
-                {isActive && (
-                  <motion.span
-                    layoutId="category-pill"
-                    className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25"
-                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  />
-                )}
-                <span className={`relative z-10 transition-colors ${isActive ? 'text-white' : 'text-text-sub'}`}>
-                  {cat}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </header>
 
       {!error && (
@@ -203,7 +168,7 @@ export function Catalog() {
           <h3 className="mb-1 font-display text-base font-bold text-text-main">Каталог не загрузился</h3>
           <p className="mb-4 text-xs text-text-sub">{error}</p>
           <button
-            onClick={() => { haptic.tap(); void fetchProducts(activeCategory, true); }}
+            onClick={() => { haptic.tap(); void fetchProducts(undefined, true); }}
             className="text-xs font-bold text-primary underline"
           >
             Повторить
@@ -216,7 +181,7 @@ export function Catalog() {
         variants={staggerGrid}
         initial="hidden"
         animate="visible"
-        key={activeCategory + query}
+        key={query}
       >
         {isLoading ? (
           <SkeletonGrid />
@@ -247,9 +212,11 @@ export function Catalog() {
                   </div>
                 )}
 
-                <span className="absolute left-2 top-2 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-text-main backdrop-blur-md">
-                  {p.category}
-                </span>
+                {p.isFeatured && (
+                  <span className="absolute left-2 top-2 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-text-main backdrop-blur-md">
+                    Хит
+                  </span>
+                )}
 
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/20 to-transparent" />
 
@@ -320,13 +287,13 @@ export function Catalog() {
               <Icon name="search_off" size={28} className="text-pastel-sand" />
             </div>
             <h3 className="mb-1 font-display text-lg font-bold text-text-main">Ничего не найдено</h3>
-            <p className="mb-5 text-sm text-text-sub">Попробуйте другой запрос или категорию</p>
-            {(query || activeCategory !== 'Все') && (
+            <p className="mb-5 text-sm text-text-sub">Попробуйте изменить поисковый запрос</p>
+            {query && (
               <button
-                onClick={() => { haptic.tap(); setSearchQuery(''); handleCategoryChange('Все'); }}
+                onClick={() => { haptic.tap(); setSearchQuery(''); }}
                 className="rounded-xl bg-pastel-ivory px-5 py-2.5 text-sm font-bold text-text-main"
               >
-                Сбросить фильтры
+                Очистить поиск
               </button>
             )}
           </motion.div>

@@ -243,7 +243,7 @@ export function Product() {
         animate="visible"
       >
         <motion.div className="mb-3 flex items-center gap-2" variants={fadeUp}>
-          <span className="chip bg-primary/10 text-primary">{product.category}</span>
+          <span className="chip bg-primary/10 text-primary">Ручная работа</span>
           {product.isFeatured && (
             <span className="chip bg-accent/15 text-accent-deep">
               <Icon name="star" size={11} /> Хит
