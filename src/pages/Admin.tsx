@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { Icon, type IconName } from '../components/Icon';
 import { useShopConfig } from '../store/useShopConfig';
+import { compressImageFile } from '../utils/imageCompressor';
 import type { OrderStatus, PaymentStatus, PaymentType } from '../utils/types';
 
 interface OrderItem {
@@ -172,10 +173,83 @@ export function Admin() {
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [editProductId, setEditProductId] = useState<number | null>(null);
-  const [productForm, setProductForm] = useState({
-    name: '', slug: '', description: '', price: '', category: '',
-    imageUrls: '', stock: '', inStock: true, isFeatured: false
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [showManualUrlInput, setShowManualUrlInput] = useState(false);
+  const [manualUrl, setManualUrl] = useState('');
+  const [productForm, setProductForm] = useState<{
+    name: string;
+    slug: string;
+    description: string;
+    price: string;
+    category: string;
+    images: string[];
+    stock: string;
+    inStock: boolean;
+    isFeatured: boolean;
+  }>({
+    name: '',
+    slug: '',
+    description: '',
+    price: '',
+    category: '',
+    images: [],
+    stock: '',
+    inStock: true,
+    isFeatured: false,
   });
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingPhotos(true);
+    try {
+      const added: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+        const compressed = await compressImageFile(file);
+        added.push(compressed);
+      }
+      setProductForm((prev) => ({
+        ...prev,
+        images: [...prev.images, ...added].slice(0, 15),
+      }));
+    } catch (err) {
+      console.error(err);
+      alert('Не удалось обработать фото');
+    } finally {
+      setUploadingPhotos(false);
+      e.target.value = '';
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setProductForm((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index),
+    }));
+  };
+
+  const makeCover = (index: number) => {
+    if (index === 0) return;
+    setProductForm((prev) => {
+      const copy = [...prev.images];
+      const [item] = copy.splice(index, 1);
+      copy.unshift(item);
+      return { ...prev, images: copy };
+    });
+  };
+
+  const handleAddManualUrl = () => {
+    const trimmed = manualUrl.trim();
+    if (!trimmed) return;
+    setProductForm((prev) => ({
+      ...prev,
+      images: [...prev.images, trimmed].slice(0, 15),
+    }));
+    setManualUrl('');
+  };
 
   // Названия способов доставки берём с сервера — в заказе лежит код (CDEK).
   useEffect(() => {
@@ -315,13 +389,6 @@ export function Admin() {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Каждая строка — отдельное фото: карточка товара умеет галерею,
-      // а сервер принимает до 10 ссылок.
-      const images = productForm.imageUrls
-        .split('\n')
-        .map((url) => url.trim())
-        .filter(Boolean);
-
       // Пустой остаток — учёт по этому товару не ведём (товар всегда доступен).
       const rawStock = productForm.stock.trim();
       const stock = rawStock === '' ? null : Math.max(0, Math.floor(Number(rawStock)));
@@ -340,7 +407,7 @@ export function Admin() {
         topNote: '',
         heartNote: '',
         baseNote: '',
-        images,
+        images: productForm.images,
         stock,
         inStock: productForm.inStock,
         isFeatured: productForm.isFeatured
@@ -364,7 +431,7 @@ export function Admin() {
     setProductForm({
       name: p.name, slug: p.slug, description: p.description,
       price: String(p.price), category: p.category || '',
-      imageUrls: (p.images || []).join('\n'),
+      images: p.images || [],
       stock: p.stock === null || p.stock === undefined ? '' : String(p.stock),
       inStock: p.inStock, isFeatured: p.isFeatured
     });
@@ -712,7 +779,7 @@ export function Admin() {
           <button
             onClick={() => {
               setEditProductId(null);
-              setProductForm({ name: '', slug: '', description: '', price: '', category: '', imageUrls: '', stock: '', inStock: true, isFeatured: false });
+              setProductForm({ name: '', slug: '', description: '', price: '', category: '', images: [], stock: '', inStock: true, isFeatured: false });
               setShowProductForm(true);
             }}
             className="w-full mb-4 rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2"
@@ -856,23 +923,95 @@ export function Admin() {
                   <textarea required value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} rows={3} placeholder="Описание изделия, особенности ручной работы..." className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Фото — по одной ссылке в строке (до 10)</label>
-                  <textarea
-                    value={productForm.imageUrls}
-                    onChange={e => setProductForm({...productForm, imageUrls: e.target.value})}
-                    rows={3}
-                    placeholder={'/images/candle_1.jpg\nhttps://…/decor_2.webp'}
-                    className="w-full rounded-xl bg-pastel-ivory/50 p-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <p className="mt-1 text-2xs text-text-sub">Первая ссылка — обложка в каталоге, остальные — в галерее.</p>
-                  
-                  {/* Photo Preview Thumbnails */}
-                  {productForm.imageUrls.trim() && (
-                    <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
-                      {productForm.imageUrls.split('\n').map(u => u.trim()).filter(Boolean).map((url, i) => (
-                        <div key={i} className="relative size-12 flex-shrink-0 rounded-lg overflow-hidden border border-pastel-sand/50 bg-pastel-sand/20">
-                          <img src={url} alt="" className="size-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                          {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-primary/90 text-white text-[8px] font-bold text-center">Главное</span>}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-text-sub uppercase block">Фотографии ({productForm.images.length}/15)</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowManualUrlInput(v => !v)}
+                      className="text-2xs font-semibold text-primary underline"
+                    >
+                      {showManualUrlInput ? 'Скрыть URL' : 'Вставить URL ссылку'}
+                    </button>
+                  </div>
+
+                  {/* Кнопка выбора фото из галереи устройства */}
+                  <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/30 bg-pastel-ivory/50 p-4 text-center cursor-pointer hover:bg-pastel-ivory transition-colors active:scale-[0.99]">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handlePhotoSelect}
+                      disabled={uploadingPhotos}
+                    />
+                    <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      {uploadingPhotos ? (
+                        <Icon name="spinner" size={20} className="animate-spin-slow" />
+                      ) : (
+                        <Icon name="palette" size={20} />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-text-main">
+                        {uploadingPhotos ? 'Сжимаем и добавляем фото…' : '📷 Выбрать фото из галереи / файлов'}
+                      </p>
+                      <p className="text-[10px] text-text-sub mt-0.5">
+                        Можно выбрать несколько фото сразу (JPEG, PNG, WebP, HEIC)
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Ручной ввод ссылки */}
+                  {showManualUrlInput && (
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={manualUrl}
+                        onChange={e => setManualUrl(e.target.value)}
+                        placeholder="https://…/image.jpg или /images/..."
+                        className="flex-1 rounded-xl bg-pastel-ivory/50 p-2.5 text-xs outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddManualUrl}
+                        className="rounded-xl bg-primary px-3 text-xs font-bold text-white shadow-sm"
+                      >
+                        Добавить
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Галерея выбранных фото */}
+                  {productForm.images.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mt-3">
+                      {productForm.images.map((url, i) => (
+                        <div key={i} className="group relative aspect-square rounded-xl overflow-hidden border border-pastel-sand/60 bg-pastel-sand/20 shadow-soft">
+                          <img src={url} alt="" className="size-full object-cover" />
+                          
+                          {/* Обложка */}
+                          {i === 0 ? (
+                            <span className="absolute top-1 left-1 rounded-md bg-primary/95 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-sm">
+                              Обложка
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => makeCover(i)}
+                              className="absolute top-1 left-1 rounded-md bg-black/60 hover:bg-primary px-1.5 py-0.5 text-[8px] font-bold text-white transition-colors"
+                            >
+                              Главное
+                            </button>
+                          )}
+
+                          {/* Удаление */}
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(i)}
+                            className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-danger transition-colors shadow-sm"
+                            aria-label="Удалить фото"
+                          >
+                            <Icon name="close" size={10} />
+                          </button>
                         </div>
                       ))}
                     </div>

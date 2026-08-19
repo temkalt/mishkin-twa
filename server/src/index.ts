@@ -41,7 +41,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // --- Bot webhook (до validateTelegram: Telegram не присылает initData) ---
 // secretToken заставляет Telegraf проверять заголовок
