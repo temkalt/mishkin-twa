@@ -8,6 +8,29 @@ export default {
   // Токены и классы `dark:` убраны, чтобы не оставлять полуработающий режим.
   theme: {
     extend: {
+      spacing: {
+        // Безопасные зоны из index.css. `pt-safe-top` — для всего, что прижато
+        // к верху: под вырезом iPhone и под плавающими кнопками Telegram.
+        "safe-top": "var(--app-top)",
+        "safe-bottom": "var(--safe-bottom)",
+        // Запас под нижние панели, чтобы последняя карточка списка не уезжала
+        // под них: `nav-safe` — под таб-бар, `bar-safe` — под свою кнопку.
+        "nav-safe": "calc(6.5rem + var(--safe-bottom))",
+        "bar-safe": "calc(7.5rem + var(--safe-bottom))",
+        "bar-safe-lg": "calc(10rem + var(--safe-bottom))",
+      },
+      // Один порядок наложения на весь проект. Раньше значения выставлялись
+      // на глаз (z-50 у таб-бара и у модалок одновременно), и клики уходили
+      // не тому элементу.
+      zIndex: {
+        raised: "10",
+        header: "30",
+        "action-bar": "40",
+        nav: "45",
+        sheet: "60",
+        modal: "70",
+        splash: "90",
+      },
       colors: {
         "primary": "#3A5A2A",
         "primary-light": "#6b8c5a",

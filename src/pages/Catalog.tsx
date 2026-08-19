@@ -105,13 +105,13 @@ export function Catalog() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light pb-28"
+      className="flex min-h-screen flex-col bg-background-light pb-nav-safe"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <header className="glass-nav sticky top-0 z-40 px-5 pb-3 pt-5">
+      <header className="glass-nav sticky top-0 z-header px-5 pb-3 pt-[calc(var(--app-top)+1.25rem)]">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <motion.button
@@ -160,7 +160,7 @@ export function Catalog() {
           )}
         </AnimatePresence>
 
-        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        <div className="h-scroll -mx-5 gap-2 px-5 pb-1.5 pt-1">
           {categories.map((cat) => {
             const isActive = activeCategory === cat;
             return (

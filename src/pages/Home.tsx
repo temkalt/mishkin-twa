@@ -48,7 +48,7 @@ export function Home() {
 
   return (
     <motion.div
-      className="mesh-bg grain flex min-h-screen flex-col pb-28"
+      className="mesh-bg grain flex min-h-screen flex-col pb-nav-safe"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -56,7 +56,7 @@ export function Home() {
     >
       {/* ===== ШАПКА ===== */}
       <motion.header
-        className="glass-nav sticky top-0 z-40 flex items-center justify-between px-5 py-4"
+        className="glass-nav sticky top-0 z-header flex items-center justify-between px-5 pb-4 pt-[calc(var(--app-top)+1rem)]"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.05, duration: 0.4, ease: EASE_OUT }}
@@ -180,7 +180,7 @@ export function Home() {
             </button>
           </motion.div>
 
-          <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-3">
+          <div className="h-scroll gap-3 px-5 pb-3">
             {isLoading && bestsellers.length === 0 ? (
               [1, 2, 3].map((i) => <SkeletonCard key={i} />)
             ) : (

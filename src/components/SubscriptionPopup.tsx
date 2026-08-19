@@ -45,7 +45,7 @@ export function SubscriptionPopup() {
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 px-4 pb-[calc(1rem+var(--safe-bottom))] pt-[calc(1rem+var(--app-top))] backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

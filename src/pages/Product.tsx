@@ -13,7 +13,7 @@ const money = (value: number) => value.toLocaleString('ru-RU');
 
 function SkeletonProduct() {
   return (
-    <div className="flex min-h-screen flex-col bg-background-light pb-24">
+    <div className="flex min-h-screen flex-col bg-background-light pb-bar-safe">
       <div className="skeleton h-[55vh] w-full" style={{ borderRadius: 0 }} />
       <div className="relative z-10 -mt-8 flex flex-col rounded-t-3xl bg-background-light px-6 pt-8">
         <div className="skeleton mb-3 h-3 w-24 rounded-lg" />
@@ -136,14 +136,14 @@ export function Product() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light pb-36"
+      className="flex min-h-screen flex-col bg-background-light pb-bar-safe"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
       {/* Плавающие кнопки поверх фото */}
-      <header className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between px-4 pt-5">
+      <header className="absolute left-0 right-0 top-0 z-header flex items-center justify-between px-4 pt-[calc(var(--app-top)+1.25rem)]">
         <motion.button
           onClick={() => { haptic.tap(); navigate(-1); }}
           aria-label="Назад"
@@ -188,7 +188,7 @@ export function Product() {
           <div
             ref={galleryRef}
             onScroll={onGalleryScroll}
-            className="no-scrollbar flex h-full w-full snap-x snap-mandatory overflow-x-auto"
+            className="h-scroll h-full w-full snap-x snap-mandatory"
           >
             {images.map((img, i) => (
               <div key={i} className="relative h-full w-full flex-shrink-0 snap-center">
@@ -309,7 +309,7 @@ export function Product() {
             <h3 className="mb-3 text-2xs font-bold uppercase tracking-wider text-text-main">
               Похожие ароматы
             </h3>
-            <div className="no-scrollbar flex gap-3 overflow-x-auto pb-2">
+            <div className="h-scroll gap-3 pb-2">
               {related.map((r) => (
                 <motion.button
                   key={r.id}
@@ -335,7 +335,7 @@ export function Product() {
 
       {/* ===== ЗАКРЕПЛЁННАЯ ПАНЕЛЬ ===== */}
       <motion.div
-        className="glass-nav fixed bottom-0 left-0 right-0 z-30 border-t border-white/40 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3"
+        className="action-bar"
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.15 }}

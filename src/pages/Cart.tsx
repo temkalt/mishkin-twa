@@ -76,33 +76,15 @@ export function Cart() {
     }
   }, []);
 
-  // Telegram MainButton ведёт в чекаут.
+  // Кнопку «Оформить» рисуем сами, а нативную MainButton прячем.
+  //
+  // Раньше корзина показывала MainButton, и на iPhone получалось два футера
+  // сразу: нативная кнопка Telegram снизу и стеклянный таб-бар над ней, у
+  // самой полоски home indicator. Своя панель ещё и умеет то, чего MainButton
+  // не умеет: гасится, пока в корзине товар не в наличии.
   useEffect(() => {
-    if (!WebApp.initData) return;
-
-    // Пока в корзине недоступный товар, кнопку не показываем — иначе человек
-    // упрётся в ошибку сервера уже после заполнения формы.
-    if (items.length === 0 || blocked) {
-      WebApp.MainButton.hide();
-      return;
-    }
-
-    WebApp.MainButton.text = `ОФОРМИТЬ — ${money(goodsTotal)} ₽`;
-    WebApp.MainButton.color = '#3A5A2A';
-    WebApp.MainButton.textColor = '#ffffff';
-    WebApp.MainButton.show();
-
-    const handleCheckout = () => {
-      haptic.press();
-      navigate('/checkout');
-    };
-    WebApp.onEvent('mainButtonClicked', handleCheckout);
-
-    return () => {
-      WebApp.offEvent('mainButtonClicked', handleCheckout);
-      WebApp.MainButton.hide();
-    };
-  }, [items.length, goodsTotal, blocked, navigate]);
+    if (WebApp.initData) WebApp.MainButton.hide();
+  }, []);
 
   const handlePromoValidate = async () => {
     if (!promoInput.trim()) return;
@@ -126,7 +108,11 @@ export function Cart() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light px-4 pb-28 pt-6"
+      className={`flex min-h-screen flex-col bg-background-light px-4 pt-[calc(var(--app-top)+1.5rem)] ${
+        // Запас под кнопку нужен только когда она есть: у пустой корзины
+        // иначе получается провал под центрированной заглушкой.
+        items.length > 0 ? 'pb-bar-safe' : 'pb-safe-bottom'
+      }`}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
@@ -381,20 +367,28 @@ export function Cart() {
               Поправьте количество или уберите товар, которого нет в наличии.
             </p>
           )}
-
-          {/* В браузере Telegram-кнопки нет — показываем свою */}
-          {!WebApp.initData && (
-            <motion.button
-              className="btn-primary mt-5"
-              whileTap={{ scale: 0.98 }}
-              disabled={blocked}
-              onClick={() => { haptic.press(); navigate('/checkout'); }}
-            >
-              <span className="sheen opacity-25" />
-              Оформить — {money(goodsTotal)} ₽
-            </motion.button>
-          )}
         </>
+      )}
+
+      {/* Закреплённая кнопка вместо нативной MainButton — таб-бар на этом
+          экране скрыт, поэтому второго футера не будет. */}
+      {items.length > 0 && (
+        <motion.div
+          className="action-bar"
+          initial={{ y: 80 }}
+          animate={{ y: 0 }}
+          transition={spring.soft}
+        >
+          <motion.button
+            className="btn-primary"
+            whileTap={{ scale: 0.98 }}
+            disabled={blocked}
+            onClick={() => { haptic.press(); navigate('/checkout'); }}
+          >
+            {!blocked && <span className="sheen opacity-25" />}
+            <span className="relative">Оформить — {money(goodsTotal)} ₽</span>
+          </motion.button>
+        </motion.div>
       )}
     </motion.div>
   );

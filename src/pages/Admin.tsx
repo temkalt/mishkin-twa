@@ -363,13 +363,13 @@ export function Admin() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light pb-8"
+      className="flex min-h-screen flex-col bg-background-light pb-[calc(2rem+var(--safe-bottom))]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background-light/80 backdrop-blur-xl px-5 py-4">
+      <header className="sticky top-0 z-header bg-background-light/80 backdrop-blur-xl px-5 pb-4 pt-[calc(var(--app-top)+1rem)]">
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => navigate('/')}
@@ -385,7 +385,7 @@ export function Admin() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        <div className="h-scroll -mx-5 gap-2 px-5 pb-1.5 pt-1">
           {['stats', 'orders', 'products', 'promo', 'broadcast', 'channel'].map((t) => (
             <button
               key={t}
@@ -497,7 +497,7 @@ export function Admin() {
       {/* ===== ORDERS TAB ===== */}
       {tab === 'orders' && (
         <div className="px-4">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-3">
+          <div className="h-scroll gap-1.5 py-3">
             <button
               onClick={() => setStatusFilter('ALL')}
               className={`whitespace-nowrap rounded-full px-3 py-1.5 text-2xs font-bold transition-all ${
@@ -764,8 +764,8 @@ export function Admin() {
       {/* Forms Modals */}
       <AnimatePresence>
         {showPromoForm && (
-          <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
+          <motion.div className="fixed inset-0 z-sheet flex items-end justify-center bg-black/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[calc(2rem+var(--safe-bottom))]" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
               <div className="flex justify-between items-center mb-5">
                 <h3 className="font-display text-lg font-bold">Новый промокод</h3>
                 <button onClick={() => setShowPromoForm(false)} className="text-text-sub" aria-label="Закрыть">
@@ -801,8 +801,8 @@ export function Admin() {
         )}
 
         {showProductForm && (
-          <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div className="w-full max-h-[90vh] overflow-y-auto max-w-md rounded-t-3xl bg-white p-5 pb-8" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
+          <motion.div className="fixed inset-0 z-sheet flex items-end justify-center bg-black/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div className="w-full max-h-[90vh] overflow-y-auto max-w-md rounded-t-3xl bg-white p-5 pb-[calc(2rem+var(--safe-bottom))]" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}>
               <div className="flex justify-between items-center mb-5 sticky top-0 bg-white z-10 pb-2 border-b border-pastel-sand/20">
                 <h3 className="font-display text-lg font-bold">{editProductId ? 'Редактировать товар' : 'Новый товар'}</h3>
                 <button type="button" onClick={() => setShowProductForm(false)} className="text-text-sub" aria-label="Закрыть">

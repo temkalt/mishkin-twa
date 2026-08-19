@@ -13,8 +13,12 @@ const ALL_TABS: Array<{ path: string; icon: IconName; label: string; adminOnly?:
   { path: '/admin', icon: 'admin', label: 'Админ', adminOnly: true },
 ];
 
-/** Экраны со своей закреплённой кнопкой снизу — там навигация мешает. */
-const HIDDEN_ON = ['/product/', '/admin', '/checkout', '/order/', '/legal'];
+/**
+ * Экраны со своей закреплённой кнопкой снизу — там навигация мешает.
+ * Корзина в списке не случайно: рядом с её кнопкой «Оформить» таб-бар давал
+ * двойной футер, который на iPhone упирался в полоску home indicator.
+ */
+const HIDDEN_ON = ['/product/', '/admin', '/cart', '/checkout', '/order/', '/legal'];
 
 export function BottomNav() {
   const location = useLocation();
@@ -30,7 +34,7 @@ export function BottomNav() {
 
   return (
     <motion.nav
-      className="safe-bottom fixed bottom-0 left-0 right-0 z-50"
+      className="safe-bottom fixed bottom-0 left-0 right-0 z-nav"
       initial={{ y: 80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.1 }}

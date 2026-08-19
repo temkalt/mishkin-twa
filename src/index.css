@@ -8,6 +8,27 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Безопасные зоны.
+   *
+   * Их два независимых источника, и складывать их обязательно:
+   *   --tg-safe-area-inset-*          — вырез/статус-бар устройства;
+   *   --tg-content-safe-area-inset-*  — плавающие кнопки самого Telegram
+   *                                     («✕», «⋯», стрелка вниз), отсчитывается
+   *                                     ОТ системной зоны, а не от края экрана.
+   * Обе группы клиент Telegram задаёт сам (Bot API 8.0+). В браузере и в старых
+   * клиентах их нет — остаётся env(), а в fullscreen такие клиенты и не умеют,
+   * так что нулевой отступ там верен.
+   */
+  :root {
+    --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px));
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
+    --safe-left: max(env(safe-area-inset-left, 0px), var(--tg-safe-area-inset-left, 0px));
+    --safe-right: max(env(safe-area-inset-right, 0px), var(--tg-safe-area-inset-right, 0px));
+    /* Всё, что прижато к верху экрана, отступает на эту величину. */
+    --app-top: calc(var(--safe-top) + var(--tg-content-safe-area-inset-top, 0px));
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }
@@ -44,6 +65,20 @@
     font-family: inherit;
     font-size: 16px; /* меньше 16px — iOS зумит страницу при фокусе */
   }
+
+  /* touch-action убирает 300 мс задержки двойного тапа в webview Telegram:
+     без него часть нажатий выглядела как «кнопка не реагирует». */
+  button,
+  a,
+  [role='button'],
+  label {
+    touch-action: manipulation;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }
 
 @layer components {
@@ -76,19 +111,37 @@
   .card {
     @apply rounded-2xl border border-line/60 bg-surface shadow-soft;
   }
+
+  /* Закреплённая снизу панель действия (корзина, товар, чекаут).
+     Отступ снизу — свой плюс home indicator iPhone, иначе кнопка липнет
+     к полоске жеста. */
+  .action-bar {
+    @apply glass-nav fixed bottom-0 left-0 right-0 z-action-bar border-t border-white/50 px-4 pt-3;
+    padding-bottom: calc(0.75rem + var(--safe-bottom));
+  }
+
+  /* Горизонтальная лента (фильтры каталога, табы админки).
+     overscroll-behavior-x: contain — чтобы протяжка до края не отдавалась
+     жестам Telegram и не закрывала мини-апп. */
+  .h-scroll {
+    @apply flex overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .h-scroll::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer utilities {
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .safe-bottom {
+    padding-bottom: var(--safe-bottom);
   }
 
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  .safe-top {
+    padding-top: var(--app-top);
   }
 
   /* Shimmer skeleton base */

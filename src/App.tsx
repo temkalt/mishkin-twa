@@ -125,7 +125,11 @@ function App() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background-light text-text-main">
+    // overflow-x-clip, а не overflow-hidden: hidden делает контейнер скролл-портом,
+    // и все sticky-шапки (главная, каталог, заказы, админка) перестают липнуть —
+    // уезжают вверх вместе с контентом. clip обрезает горизонтальный выезд
+    // страниц при переходе, но скролл-порт не создаёт.
+    <div className="relative min-h-screen w-full overflow-x-clip bg-background-light text-text-main">
       <AnimatePresence mode="wait">
         {showSplash && <Splash key="splash" onComplete={handleSplashComplete} />}
       </AnimatePresence>
@@ -134,7 +138,10 @@ function App() {
         <>
           <SubscriptionPopup />
           <Suspense fallback={<PageFallback />}>
-            <AnimatePresence mode="popLayout" initial={false}>
+            {/* mode="wait", а не "popLayout": popLayout оставлял уходящую
+                страницу в потоке с position: absolute, и полсекунды после
+                перехода тапы попадали в неё, а не в новый экран. */}
+            <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={location.pathname}
                 variants={pageVariants}

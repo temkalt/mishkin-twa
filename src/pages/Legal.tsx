@@ -89,7 +89,7 @@ export function Legal() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light px-4 pb-28 pt-6"
+      className="flex min-h-screen flex-col bg-background-light px-4 pb-nav-safe pt-[calc(var(--app-top)+1.5rem)]"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}

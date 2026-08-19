@@ -65,12 +65,12 @@ export function Orders() {
 
   return (
     <motion.div
-      className="flex min-h-screen flex-col bg-background-light pb-28"
+      className="flex min-h-screen flex-col bg-background-light pb-nav-safe"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <header className="glass-nav sticky top-0 z-40 px-5 py-5">
+      <header className="glass-nav sticky top-0 z-header px-5 pb-5 pt-[calc(var(--app-top)+1.25rem)]">
         <h1 className="font-display text-xl font-bold text-text-main">Мои заказы</h1>
         {orders.length > 0 && (
           <p className="text-2xs text-text-sub">{orders.length} шт. · нажмите, чтобы раскрыть</p>
