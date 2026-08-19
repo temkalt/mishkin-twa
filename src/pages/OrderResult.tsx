@@ -6,6 +6,7 @@ import { api } from '../utils/api';
 import { haptic } from '../utils/haptics';
 import { Icon } from '../components/Icon';
 import { PaymentWidget } from '../components/PaymentWidget';
+import { MockPaymentModal } from '../components/MockPaymentModal';
 import { EASE_OUT, spring } from '../utils/motion';
 import type { PaymentStartResponse, PaymentStatusResponse } from '../utils/types';
 
@@ -44,6 +45,8 @@ export function OrderResult() {
   const [pollExpired, setPollExpired] = useState(false);
   /** Непустой токен = показываем форму оплаты поверх страницы. */
   const [widgetToken, setWidgetToken] = useState('');
+  /** Данные для встроенного эмулятора тестовой оплаты */
+  const [mockModal, setMockModal] = useState<{ paymentId: string; amount: number; confirmationUrl?: string } | null>(null);
   const celebrated = useRef(false);
   // Защита от двойного запуска: state-флаг для этого не годится, он приходит
   // на следующий рендер, а автозапуск и тап по кнопке могут случиться подряд.
@@ -92,6 +95,7 @@ export function OrderResult() {
     // Оплата подтверждена сервером — форма больше не нужна, даже если её
     // закрыл вебхук, а не пользователь.
     setWidgetToken('');
+    setMockModal(null);
     if (!celebrated.current) {
       celebrated.current = true;
       haptic.celebrate();
@@ -103,8 +107,7 @@ export function OrderResult() {
    * Запускает оплату заказа.
    *
    * По умолчанию сервер отдаёт токен виджета — форма открывается здесь же.
-   * `mode = 'redirect'` просит ссылку на страницу ЮKassa: это откат, если
-   * виджет не поднялся, и единственный путь в режиме эмулятора.
+   * В тестовом режиме эмулятора открываем аккуратный модальный эмулятор.
    */
   const startPayment = useCallback(async (mode?: 'redirect') => {
     if (paying.current) return;
@@ -118,13 +121,24 @@ export function OrderResult() {
       });
       haptic.press();
 
-      if (started.confirmationToken) {
+      if (started.mock) {
+        setMockModal({
+          paymentId: started.paymentId,
+          amount: started.amount || (data ? data.totalPrice : 0),
+          confirmationUrl: started.confirmationUrl,
+        });
+      } else if (started.confirmationToken) {
         setWidgetToken(started.confirmationToken);
       } else if (started.confirmationUrl) {
-        // Страницу оплаты открываем во внешнем браузере: 3-D Secure и
-        // приложения банков внутри Mini App не работают.
-        if (WebApp.initData && WebApp.openLink) WebApp.openLink(started.confirmationUrl);
-        else window.location.href = started.confirmationUrl;
+        if (WebApp.initData && WebApp.openLink) {
+          try {
+            WebApp.openLink(started.confirmationUrl);
+          } catch {
+            window.location.href = started.confirmationUrl;
+          }
+        } else {
+          window.location.href = started.confirmationUrl;
+        }
       } else {
         throw new Error('Сервер не вернул способ оплаты');
       }
@@ -138,7 +152,7 @@ export function OrderResult() {
       paying.current = false;
       setRetrying(false);
     }
-  }, [orderId, fetchStatus]);
+  }, [orderId, data, fetchStatus]);
 
   // Из чекаута приходим уже готовыми платить — второго нажатия не просим.
   useEffect(() => {
@@ -354,6 +368,26 @@ export function OrderResult() {
           onFail={handleWidgetFail}
           onUnavailable={handleWidgetUnavailable}
           onClose={closeWidget}
+        />
+      )}
+
+      {mockModal && (
+        <MockPaymentModal
+          key={mockModal.paymentId}
+          paymentId={mockModal.paymentId}
+          orderId={data.orderId}
+          amount={mockModal.amount || data.totalPrice}
+          confirmationUrl={mockModal.confirmationUrl}
+          onSuccess={() => {
+            setMockModal(null);
+            void fetchStatus();
+          }}
+          onFail={() => {
+            setMockModal(null);
+            setPayError('Тестовый платёж был отклонён');
+            void fetchStatus();
+          }}
+          onClose={() => setMockModal(null)}
         />
       )}
     </AnimatePresence>

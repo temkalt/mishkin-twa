@@ -7,7 +7,7 @@ const router = Router();
 
 const productSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug: только латиница, цифры и дефис'),
+  slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug: только латиница, цифры и дефис').optional(),
   description: z.string().trim().max(4000).default(''),
   price: z.number().positive().max(10_000_000),
   category: z.string().trim().min(1).max(60),
@@ -110,6 +110,23 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+function slugify(text: string): string {
+  const ru: Record<string, string> = {
+    а:'a', б:'b', в:'v', г:'g', д:'d', е:'e', ё:'yo', ж:'zh', з:'z', и:'i', й:'y',
+    к:'k', л:'l', м:'m', н:'n', о:'o', п:'p', р:'r', с:'s', т:'t', у:'u', ф:'f',
+    х:'kh', ц:'ts', ч:'ch', ш:'sh', щ:'shch', ъ:'', ы:'y', ь:'', э:'e', ю:'yu', я:'ya',
+  };
+  const s = text
+    .toLowerCase()
+    .split('')
+    .map((char) => ru[char] ?? char)
+    .join('')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return s || `item-${Date.now()}`;
+}
+
 // POST /api/products — создать товар (admin)
 router.post('/', isAdmin, async (req, res) => {
   const parsed = productSchema.safeParse(req.body);
@@ -119,10 +136,12 @@ router.post('/', isAdmin, async (req, res) => {
   }
 
   try {
-    const { price, images, ...rest } = parsed.data;
+    const { price, images, slug, ...rest } = parsed.data;
+    const finalSlug = slug || slugify(rest.name);
     const product = await prisma.product.create({
       data: {
         ...rest,
+        slug: finalSlug,
         price: Math.round(price * 100), // рубли -> копейки
         images: JSON.stringify(images),
       },

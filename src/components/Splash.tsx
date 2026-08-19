@@ -22,32 +22,31 @@ export function Splash({ onComplete }: SplashProps) {
       exit={{ opacity: 0, scale: 1.08, filter: 'blur(10px)' }}
       transition={{ duration: 0.5, ease: EASE_OUT }}
     >
-      {/* Breathing halo rings */}
-      {[0, 1, 2].map((i) => (
+      {/* Soft warm aura */}
+      <motion.div
+        className="absolute size-72 rounded-full bg-gradient-to-tr from-accent/25 via-warm-accent/20 to-transparent blur-3xl pointer-events-none"
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: [0.8, 1.2, 1], opacity: [0, 0.8, 0.5] }}
+        transition={{ duration: 1.6, ease: EASE_OUT }}
+      />
+
+      {/* Subtle warm rings */}
+      {[0, 1].map((i) => (
         <motion.div
           key={i}
-          className="absolute rounded-full border border-primary/15"
-          style={{ width: 180 + i * 90, height: 180 + i * 90 }}
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: [0, 0.6, 0.25] }}
-          transition={{ duration: 1.6, delay: i * 0.15, ease: EASE_OUT }}
+          className="absolute rounded-full border border-accent/20 pointer-events-none"
+          style={{ width: 190 + i * 80, height: 190 + i * 80 }}
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: [0, 0.45, 0.18] }}
+          transition={{ duration: 1.6, delay: i * 0.2, ease: EASE_OUT }}
         />
       ))}
 
-      {/* Soft ambient glow */}
-      <motion.div
-        className="absolute size-56 rounded-full bg-primary/15"
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{ scale: 1.5, opacity: 1 }}
-        transition={{ duration: 1.2, ease: 'easeOut' }}
-        style={{ filter: 'blur(46px)' }}
-      />
-
-      {/* Drifting embers */}
+      {/* Drifting warm embers */}
       {EMBERS.map((e, i) => (
         <motion.span
           key={i}
-          className="absolute bottom-1/3 rounded-full bg-accent/70"
+          className="absolute bottom-1/3 rounded-full bg-accent/70 pointer-events-none"
           style={{ width: e.s, height: e.s, left: `calc(50% + ${e.x})` }}
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: -120, opacity: [0, 1, 0] }}

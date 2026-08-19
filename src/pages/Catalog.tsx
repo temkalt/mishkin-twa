@@ -151,7 +151,7 @@ export function Catalog() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Название, категория, нота…"
+                placeholder="Поиск по названию или декору…"
                 aria-label="Поиск по каталогу"
                 autoFocus
                 className="field mb-3 !py-3 text-sm"

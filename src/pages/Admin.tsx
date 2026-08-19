@@ -121,6 +121,22 @@ const money = (value: number) => value.toLocaleString('ru-RU');
 
 type Tab = 'stats' | 'orders' | 'products' | 'promo' | 'broadcast' | 'channel';
 
+function toSlug(text: string): string {
+  const ru: Record<string, string> = {
+    а:'a', б:'b', в:'v', г:'g', д:'d', е:'e', ё:'yo', ж:'zh', з:'z', и:'i', й:'y',
+    к:'k', л:'l', м:'m', н:'n', о:'o', п:'p', р:'r', с:'s', т:'t', у:'u', ф:'f',
+    х:'kh', ц:'ts', ч:'ch', ш:'sh', щ:'shch', ъ:'', ы:'y', ь:'', э:'e', ю:'yu', я:'ya',
+  };
+  return text
+    .toLowerCase()
+    .split('')
+    .map((char) => ru[char] ?? char)
+    .join('')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
 export function Admin() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('stats');
@@ -137,8 +153,6 @@ export function Admin() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  // Трек-номер вводится тут же, где меняется статус: «Отправлен» без трека
-  // покупателю ничего не говорит.
   const [trackDrafts, setTrackDrafts] = useState<Record<number, string>>({});
 
   // Forms state
@@ -159,8 +173,8 @@ export function Admin() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [editProductId, setEditProductId] = useState<number | null>(null);
   const [productForm, setProductForm] = useState({
-    name: '', slug: '', description: '', price: '', category: 'Ароматические',
-    topNote: '', heartNote: '', baseNote: '', imageUrls: '', stock: '', inStock: true, isFeatured: false
+    name: '', slug: '', description: '', price: '', category: '',
+    imageUrls: '', stock: '', inStock: true, isFeatured: false
   });
 
   // Названия способов доставки берём с сервера — в заказе лежит код (CDEK).
@@ -316,15 +330,16 @@ export function Admin() {
         return;
       }
 
+      const slug = (productForm.slug.trim() || toSlug(productForm.name)) || `item-${Date.now()}`;
       const payload = {
-        name: productForm.name,
-        slug: productForm.slug,
-        description: productForm.description,
+        name: productForm.name.trim(),
+        slug,
+        description: productForm.description.trim(),
         price: Number(productForm.price),
-        category: productForm.category,
-        topNote: productForm.topNote,
-        heartNote: productForm.heartNote,
-        baseNote: productForm.baseNote,
+        category: productForm.category.trim() || 'Общее',
+        topNote: '',
+        heartNote: '',
+        baseNote: '',
         images,
         stock,
         inStock: productForm.inStock,
@@ -348,8 +363,7 @@ export function Admin() {
   const openEditProduct = (p: Product) => {
     setProductForm({
       name: p.name, slug: p.slug, description: p.description,
-      price: String(p.price), category: p.category,
-      topNote: p.topNote, heartNote: p.heartNote, baseNote: p.baseNote,
+      price: String(p.price), category: p.category || '',
       imageUrls: (p.images || []).join('\n'),
       stock: p.stock === null || p.stock === undefined ? '' : String(p.stock),
       inStock: p.inStock, isFeatured: p.isFeatured
@@ -698,7 +712,7 @@ export function Admin() {
           <button
             onClick={() => {
               setEditProductId(null);
-              setProductForm({ name: '', slug: '', description: '', price: '', category: 'Ароматические', topNote: '', heartNote: '', baseNote: '', imageUrls: '', stock: '', inStock: true, isFeatured: false });
+              setProductForm({ name: '', slug: '', description: '', price: '', category: '', imageUrls: '', stock: '', inStock: true, isFeatured: false });
               setShowProductForm(true);
             }}
             className="w-full mb-4 rounded-xl bg-primary text-white py-3 font-bold text-sm shadow-md flex items-center justify-center gap-2"
@@ -741,7 +755,7 @@ export function Admin() {
                     <span
                       className={`rounded-full px-2 py-0.5 text-2xs font-bold ${
                         !p.inStock
-                          ? 'bg-danger/10 text-danger'
+                           ? 'bg-danger/10 text-danger'
                           : soldOut
                             ? 'bg-amber-50 text-amber-700'
                             : 'bg-emerald-50 text-emerald-700'
@@ -812,21 +826,34 @@ export function Admin() {
               <form onSubmit={handleSaveProduct} className="flex flex-col gap-4">
                 <div>
                   <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Название</label>
-                  <input required value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')})} className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input
+                    required
+                    value={productForm.name}
+                    onChange={e => {
+                      const name = e.target.value;
+                      setProductForm(prev => ({
+                        ...prev,
+                        name,
+                        slug: prev.slug && editProductId ? prev.slug : toSlug(name)
+                      }));
+                    }}
+                    placeholder="Например, Ваза керамическая"
+                    className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Цена (₽)</label>
-                    <input required type="number" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
+                    <input required type="number" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} placeholder="3200" className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Категория</label>
-                    <input required value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})} className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
+                    <input value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})} placeholder="Категория товара" className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
                   </div>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Описание</label>
-                  <textarea required value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} rows={3} className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
+                  <textarea required value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} rows={3} placeholder="Описание изделия, особенности ручной работы..." className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Фото — по одной ссылке в строке (до 10)</label>
@@ -834,10 +861,22 @@ export function Admin() {
                     value={productForm.imageUrls}
                     onChange={e => setProductForm({...productForm, imageUrls: e.target.value})}
                     rows={3}
-                    placeholder={'/images/candle_1.jpg\nhttps://…/candle_2.webp'}
+                    placeholder={'/images/candle_1.jpg\nhttps://…/decor_2.webp'}
                     className="w-full rounded-xl bg-pastel-ivory/50 p-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
                   />
-                  <p className="mt-1 text-2xs text-text-sub">Первая — обложка в каталоге, остальные попадут в галерею товара.</p>
+                  <p className="mt-1 text-2xs text-text-sub">Первая ссылка — обложка в каталоге, остальные — в галерее.</p>
+                  
+                  {/* Photo Preview Thumbnails */}
+                  {productForm.imageUrls.trim() && (
+                    <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
+                      {productForm.imageUrls.split('\n').map(u => u.trim()).filter(Boolean).map((url, i) => (
+                        <div key={i} className="relative size-12 flex-shrink-0 rounded-lg overflow-hidden border border-pastel-sand/50 bg-pastel-sand/20">
+                          <img src={url} alt="" className="size-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-primary/90 text-white text-[8px] font-bold text-center">Главное</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-text-sub uppercase mb-1 block">Остаток, шт.</label>
@@ -851,23 +890,8 @@ export function Admin() {
                     className="w-full rounded-xl bg-pastel-ivory/50 p-3 outline-none focus:ring-2 focus:ring-primary/20"
                   />
                   <p className="mt-1 text-2xs text-text-sub">
-                    Списывается при оформлении заказа и возвращается при отмене. Пусто — учёт не ведётся,
-                    товар всегда доступен. 0 — покупатель видит «нет в наличии».
+                    Пусто — товар всегда доступен (учет не ведется). 0 — статус «нет в наличии».
                   </p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-2xs font-bold text-text-sub uppercase mb-1 block">Верхняя нота</label>
-                    <input value={productForm.topNote} onChange={e => setProductForm({...productForm, topNote: e.target.value})} className="w-full rounded-lg bg-pastel-ivory/50 p-2 text-xs outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-2xs font-bold text-text-sub uppercase mb-1 block">Сердце</label>
-                    <input value={productForm.heartNote} onChange={e => setProductForm({...productForm, heartNote: e.target.value})} className="w-full rounded-lg bg-pastel-ivory/50 p-2 text-xs outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-2xs font-bold text-text-sub uppercase mb-1 block">База</label>
-                    <input value={productForm.baseNote} onChange={e => setProductForm({...productForm, baseNote: e.target.value})} className="w-full rounded-lg bg-pastel-ivory/50 p-2 text-xs outline-none" />
-                  </div>
                 </div>
                 <div className="flex gap-4 mt-2">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -879,7 +903,7 @@ export function Admin() {
                     <span className="text-sm font-medium">Хит продаж</span>
                   </label>
                 </div>
-                <button type="submit" className="w-full mt-4 rounded-xl bg-primary text-white py-3 font-bold shadow-md">Сохранить</button>
+                <button type="submit" className="w-full mt-4 rounded-xl bg-primary text-white py-3 font-bold shadow-md">Сохранить товар</button>
               </form>
             </motion.div>
           </motion.div>

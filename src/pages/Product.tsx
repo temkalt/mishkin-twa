@@ -288,8 +288,8 @@ export function Product() {
         {/* Преимущества — короткие плашки вместо простыни текста */}
         <motion.div className="mb-7 grid grid-cols-3 gap-2" variants={fadeUp}>
           {([
-            { icon: 'palette' as const, label: 'Ручная\nзаливка' },
-            { icon: 'leaf' as const, label: 'Соевый\nвоск' },
+            { icon: 'palette' as const, label: 'Ручная\nработа' },
+            { icon: 'sparkles' as const, label: 'Авторский\nдизайн' },
             { icon: 'shipping' as const, label: 'Доставка\nпо РФ' },
           ]).map((item) => (
             <div
@@ -307,7 +307,7 @@ export function Product() {
         {related.length > 0 && (
           <motion.div className="mb-6" variants={fadeUp}>
             <h3 className="mb-3 text-2xs font-bold uppercase tracking-wider text-text-main">
-              Похожие ароматы
+              Вам может понравиться
             </h3>
             <div className="h-scroll gap-3 pb-2">
               {related.map((r) => (

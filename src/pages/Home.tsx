@@ -10,10 +10,10 @@ import { fadeUp, staggerContainer, spring, EASE_OUT } from '../utils/motion';
 const money = (value: number) => value.toLocaleString('ru-RU');
 
 const ADVANTAGES: Array<{ icon: IconName; title: string; desc: string }> = [
-  { icon: 'palette', title: 'Ручная работа', desc: 'Каждая свеча уникальна' },
-  { icon: 'leaf', title: 'Соевый воск', desc: 'Чистое горение без копоти' },
+  { icon: 'palette', title: 'Ручная работа', desc: 'Каждое изделие уникально' },
+  { icon: 'leaf', title: 'Натуральные основы', desc: 'Экологичные материалы' },
   { icon: 'shipping', title: 'Доставка', desc: 'По всей России' },
-  { icon: 'wind', title: 'Эфирные масла', desc: 'Без синтетики в основе' },
+  { icon: 'sparkles', title: 'С душой', desc: 'Внимание к каждой детали' },
 ];
 
 function SkeletonCard() {
@@ -171,7 +171,7 @@ export function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18, duration: 0.4, ease: EASE_OUT }}
           >
-            <h3 className="font-display text-lg font-bold text-text-main">Популярные ароматы</h3>
+            <h3 className="font-display text-lg font-bold text-text-main">Популярные товары</h3>
             <button
               onClick={() => { haptic.tap(); navigate('/catalog'); }}
               className="text-xs font-semibold uppercase tracking-wider text-primary active:opacity-60"
@@ -228,7 +228,7 @@ export function Home() {
         </section>
       )}
 
-      {/* ===== ЛИМИТИРОВАННАЯ КОЛЛЕКЦИЯ ===== */}
+      {/* ===== ОСОБАЯ КОЛЛЕКЦИЯ ===== */}
       {limited.length > 0 && (
         <motion.section
           className="mx-4 mb-8"
@@ -241,7 +241,7 @@ export function Home() {
             <span className="animate-float text-accent-deep">
               <Icon name="diamond" size={17} />
             </span>
-            <h3 className="font-display text-lg font-bold text-text-main">Лимитированная коллекция</h3>
+            <h3 className="font-display text-lg font-bold text-text-main">Особая коллекция</h3>
           </div>
 
           <motion.div
@@ -270,7 +270,7 @@ export function Home() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent-deep">
-                    Лимитированная
+                    Эксклюзив
                   </span>
                   <h4 className="truncate text-sm font-bold text-text-main">{p.name}</h4>
                   <p className="line-clamp-1 text-xs text-text-sub">{p.description}</p>
@@ -297,9 +297,9 @@ export function Home() {
           </span>
           <h3 className="mb-2 font-display text-xl font-bold text-text-main">Искусство создания уюта</h3>
           <p className="text-sm leading-relaxed text-text-sub">
-            Каждая свеча MISHKIN — это медитация ручного труда. Мы отбираем лучший соевый воск,
-            смешиваем его с эфирными маслами от фермеров Прованса и создаём ароматы, которые
-            превращают ваш дом в место абсолютного покоя.
+            Мы все делаем сами и вкладываем душу в наш продукт. Создаем авторские
+            предметы декора и интерьерные изделия ручной работы, которые наполняют
+            ваш дом теплом, гармонией и уникальной атмосферой.
           </p>
         </div>
       </Reveal>

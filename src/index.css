@@ -182,9 +182,9 @@
   .mesh-bg {
     background-color: theme('colors.background-light');
     background-image:
-      radial-gradient(60% 45% at 15% 0%, rgba(58, 90, 42, 0.10) 0%, transparent 60%),
-      radial-gradient(50% 40% at 100% 10%, rgba(212, 163, 115, 0.14) 0%, transparent 55%),
-      radial-gradient(70% 60% at 50% 100%, rgba(235, 229, 217, 0.55) 0%, transparent 70%);
+      radial-gradient(60% 45% at 15% 0%, rgba(212, 163, 115, 0.09) 0%, transparent 60%),
+      radial-gradient(50% 40% at 100% 10%, rgba(212, 163, 115, 0.12) 0%, transparent 55%),
+      radial-gradient(70% 60% at 50% 100%, rgba(235, 229, 217, 0.50) 0%, transparent 70%);
     background-size: 180% 180%;
     animation: gradientPan 14s ease-in-out infinite;
   }
