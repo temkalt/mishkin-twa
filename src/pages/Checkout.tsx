@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { WebApp } from '../utils/telegram';
@@ -31,6 +31,7 @@ export function Checkout() {
   const navigate = useNavigate();
   const { items, getTotal, clear } = useCartStore();
   const { delivery, payment, load, isLoading } = useShopConfig();
+  const orderSubmittedRef = useRef(false);
 
   const [form, setForm] = useState<FormState>({
     name: '', phone: '', city: '', address: '', postal: '', comment: '',
@@ -47,9 +48,11 @@ export function Checkout() {
     void load();
   }, [load]);
 
-  // Пустую корзину оформлять нечего.
+  // Пустую корзину оформлять нечего (не перенаправляем, если заказ только что отправлен)
   useEffect(() => {
-    if (items.length === 0) navigate('/cart', { replace: true });
+    if (!orderSubmittedRef.current && items.length === 0) {
+      navigate('/cart', { replace: true });
+    }
   }, [items.length, navigate]);
 
   // Имя и телефон подставляем из Telegram — меньше ручного ввода.
@@ -136,6 +139,7 @@ export function Checkout() {
         consent: true,
       });
 
+      orderSubmittedRef.current = true;
       clear();
       sessionStorage.removeItem('mishkin_promo');
       // Экран заказа умеет восстанавливаться после возврата из браузера оплаты.

@@ -1,8 +1,9 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
 import { spring } from '../utils/motion';
 import { haptic } from '../utils/haptics';
+import { api } from '../utils/api';
 
 interface MockPaymentModalProps {
   paymentId: string;
@@ -34,12 +35,7 @@ export function MockPaymentModal({
     haptic.press();
 
     try {
-      const res = await fetch(`/api/payments/mock/${encodeURIComponent(paymentId)}/${outcome}`, {
-        method: 'POST',
-      });
-      if (!res.ok) {
-        throw new Error('Не удалось завершить тестовый платёж');
-      }
+      await api.post(`/payments/mock/${encodeURIComponent(paymentId)}/${outcome}`, {});
       if (outcome === 'succeeded') {
         haptic.celebrate();
         onSuccess();

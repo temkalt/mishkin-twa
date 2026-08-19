@@ -108,11 +108,7 @@ export function Cart() {
 
   return (
     <motion.div
-      className={`flex min-h-screen flex-col bg-background-light px-4 pt-[calc(var(--app-top)+1.5rem)] ${
-        // Запас под кнопку нужен только когда она есть: у пустой корзины
-        // иначе получается провал под центрированной заглушкой.
-        items.length > 0 ? 'pb-bar-safe' : 'pb-safe-bottom'
-      }`}
+      className="flex min-h-screen flex-col bg-background-light px-4 pb-nav-safe pt-[calc(var(--app-top)+1.5rem)]"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
@@ -370,23 +366,22 @@ export function Cart() {
         </>
       )}
 
-      {/* Закреплённая кнопка вместо нативной MainButton — таб-бар на этом
-          экране скрыт, поэтому второго футера не будет. */}
+      {/* Кнопка оформления заказа */}
       {items.length > 0 && (
         <motion.div
-          className="action-bar"
-          initial={{ y: 80 }}
-          animate={{ y: 0 }}
+          className="mt-5 pb-6"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={spring.soft}
         >
           <motion.button
-            className="btn-primary"
+            className="btn-primary w-full py-4 text-base shadow-glow font-bold"
             whileTap={{ scale: 0.98 }}
             disabled={blocked}
             onClick={() => { haptic.press(); navigate('/checkout'); }}
           >
             {!blocked && <span className="sheen opacity-25" />}
-            <span className="relative">Оформить — {money(goodsTotal)} ₽</span>
+            <span className="relative">Оформить заказ — {money(goodsTotal)} ₽</span>
           </motion.button>
         </motion.div>
       )}

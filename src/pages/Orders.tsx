@@ -270,7 +270,7 @@ export function Orders() {
                           {needsPayment && (
                             <button
                               className="btn-primary"
-                              onClick={() => { haptic.press(); navigate(`/order/${order.id}`); }}
+                              onClick={() => { haptic.press(); navigate(`/order/${order.id}`, { state: { autoPay: true } }); }}
                             >
                               <span className="relative flex items-center justify-center gap-2">
                                 <Icon name="card" size={18} /> Оплатить {money(order.totalPrice)} ₽

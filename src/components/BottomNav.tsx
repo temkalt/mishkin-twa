@@ -18,7 +18,7 @@ const ALL_TABS: Array<{ path: string; icon: IconName; label: string; adminOnly?:
  * Корзина в списке не случайно: рядом с её кнопкой «Оформить» таб-бар давал
  * двойной футер, который на iPhone упирался в полоску home indicator.
  */
-const HIDDEN_ON = ['/product/', '/admin', '/cart', '/checkout', '/order/', '/legal'];
+const HIDDEN_ON = ['/product/', '/admin', '/checkout', '/order/', '/legal'];
 
 export function BottomNav() {
   const location = useLocation();
