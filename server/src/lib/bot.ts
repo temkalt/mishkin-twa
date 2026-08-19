@@ -176,6 +176,38 @@ bot.start(async (ctx) => {
     console.error('Failed to set menu button', e);
   }
 
+  // Обработка диплинков /start product_12 или /start p12
+  const payload = (ctx as any).startPayload as string | undefined;
+  if (payload) {
+    const prodMatch = payload.match(/^(?:product_|p_|prod_)?(\d+)$/);
+    if (prodMatch) {
+      const prodId = parseInt(prodMatch[1], 10);
+      try {
+        const prod = await prisma.product.findUnique({ where: { id: prodId } });
+        if (prod) {
+          const priceRub = (prod.price / 100).toLocaleString('ru-RU');
+          await ctx.reply(
+            `✨ *${prod.name}*\n\n` +
+            (prod.description ? `${prod.description}\n\n` : '') +
+            `💰 *Цена: ${priceRub} ₽*\n\n` +
+            `Нажмите кнопку ниже, чтобы открыть товар в приложении:`,
+            {
+              parse_mode: 'Markdown',
+              ...Markup.inlineKeyboard([
+                [Markup.button.webApp(`🛍 Открыть «${prod.name}»`, `${WEBAPP_URL}/product/${prod.id}`)],
+                [Markup.button.webApp('🏠 Весь каталог', `${WEBAPP_URL}/catalog`)],
+                [Markup.button.callback('💬 Связь с менеджером', 'request_support')]
+              ]),
+            }
+          );
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to handle product deep link in bot:', err);
+      }
+    }
+  }
+
   await ctx.reply(
     `Добро пожаловать в *MISHKIN*, ${firstName}!\n\n` +
     `Мы создаём авторские изделия и уютный декор ручной работы с душой.\n\n` +

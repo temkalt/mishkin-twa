@@ -83,12 +83,30 @@ export function Product() {
 
   const share = () => {
     haptic.tap();
-    const url = window.location.href;
-    const text = `${currentProduct?.name} — MISHKIN`;
+    if (!currentProduct) return;
+
+    // Прямая ссылка на Mini App внутри Telegram:
+    // https://t.me/<bot_username>/<app_name>?startapp=product_<id>
+    const botUsername = import.meta.env.VITE_BOT_USERNAME || 'VanDayBot';
+    const appShortName = import.meta.env.VITE_APP_SHORT_NAME || 'app';
+    const directAppLink = `https://t.me/${botUsername}/${appShortName}?startapp=product_${currentProduct.id}`;
+    const priceText = (currentProduct.price / 100).toLocaleString('ru-RU');
+    const shareText = `✨ Посмотри «${currentProduct.name}» (${priceText} ₽) в магазине MISHKIN:`;
+
+    const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(directAppLink)}&text=${encodeURIComponent(shareText)}`;
+
     if (isInTelegram() && WebApp.openTelegramLink) {
-      WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+      WebApp.openTelegramLink(telegramShareUrl);
     } else if (navigator.share) {
-      void navigator.share({ title: text, url });
+      void navigator.share({
+        title: currentProduct.name,
+        text: shareText,
+        url: directAppLink,
+      }).catch(() => {
+        window.open(telegramShareUrl, '_blank');
+      });
+    } else {
+      window.open(telegramShareUrl, '_blank');
     }
   };
 

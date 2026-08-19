@@ -67,18 +67,54 @@ function App() {
     void useShopConfig.getState().load();
   }, []);
 
-  // Возврат из оплаты: Telegram открывает Mini App со start_param=paid-<id>.
+  // Обработка диплинков (Telegram start_param и URL params):
+  // 1. Возврат из оплаты: start_param=paid-<id> -> /order/:id
+  // 2. Ссылка «Поделиться товаром»: start_param=product_<id> -> /product/:id
   useEffect(() => {
     if (showSplash) return;
+
+    // Читаем параметр из Telegram WebApp initDataUnsafe
     const startParam = getWebApp()?.initDataUnsafe?.start_param;
-    const match = startParam?.match(/^paid-(\d+)$/);
-    if (match) {
-      navigate(`/order/${match[1]}`, { replace: true });
+    if (startParam) {
+      const paidMatch = startParam.match(/^paid-(\d+)$/);
+      if (paidMatch) {
+        navigate(`/order/${paidMatch[1]}`, { replace: true });
+        return;
+      }
+      const prodMatch = startParam.match(/^(?:product_|p_|prod_)?(\d+)$/);
+      if (prodMatch) {
+        navigate(`/product/${prodMatch[1]}`, { replace: true });
+        return;
+      }
+    }
+
+    // Читаем параметр из URL (tgWebAppStartParam / startapp / paid / product)
+    const params = new URLSearchParams(window.location.search);
+    const tgParam = params.get('tgWebAppStartParam') || params.get('startapp');
+    if (tgParam) {
+      const paidMatch = tgParam.match(/^paid-(\d+)$/);
+      if (paidMatch) {
+        navigate(`/order/${paidMatch[1]}`, { replace: true });
+        return;
+      }
+      const prodMatch = tgParam.match(/^(?:product_|p_|prod_)?(\d+)$/);
+      if (prodMatch) {
+        navigate(`/product/${prodMatch[1]}`, { replace: true });
+        return;
+      }
+    }
+
+    const paid = params.get('paid');
+    if (paid && /^\d+$/.test(paid)) {
+      navigate(`/order/${paid}`, { replace: true });
       return;
     }
-    // В браузере тот же случай приходит как ?paid=<id>.
-    const paid = new URLSearchParams(window.location.search).get('paid');
-    if (paid && /^\d+$/.test(paid)) navigate(`/order/${paid}`, { replace: true });
+
+    const product = params.get('product');
+    if (product && /^\d+$/.test(product)) {
+      navigate(`/product/${product}`, { replace: true });
+      return;
+    }
   }, [showSplash, navigate]);
 
   // Telegram BackButton
