@@ -351,8 +351,11 @@ router.patch('/:id/status', isAdmin, async (req, res) => {
       },
     });
 
-    // Клиент узнаёт о смене статуса сам, без звонка менеджера.
-    void notifyOrderStatus(order.telegramUserId, order.id, order.status);
+    const deliveryOpt = findDeliveryOption(order.deliveryMethod);
+    const track = parsed.data.trackNumber ?? order.trackNumber;
+
+    // Клиент узнаёт о смене статуса и трек-номере прямо в ЛС Telegram:
+    void notifyOrderStatus(order.telegramUserId, order.id, order.status, track, deliveryOpt?.label);
 
     // Отменённый заказ отпускает товар обратно на склад. Обратный переход
     // («Отменён» → любой другой) остаток не резервирует заново — админка такой
@@ -366,6 +369,29 @@ router.patch('/:id/status', isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error updating order status:', error);
     res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// PATCH /api/orders/:id/track — обновить трек-номер и отправить в ЛС клиенту (только админ)
+router.patch('/:id/track', isAdmin, async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id), 10);
+    const trackNumber = String(req.body.trackNumber || '').trim();
+
+    const order = await prisma.order.update({
+      where: { id },
+      data: { trackNumber },
+    });
+
+    const deliveryOpt = findDeliveryOption(order.deliveryMethod);
+    if (trackNumber) {
+      void notifyOrderStatus(order.telegramUserId, order.id, order.status, trackNumber, deliveryOpt?.label);
+    }
+
+    res.json({ id: order.id, status: order.status, trackNumber: order.trackNumber });
+  } catch (error) {
+    console.error('Error updating track number:', error);
+    res.status(500).json({ error: 'Не удалось обновить трек-номер' });
   }
 });
 

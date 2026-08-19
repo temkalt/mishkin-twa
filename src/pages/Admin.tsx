@@ -312,6 +312,27 @@ export function Admin() {
     }
   };
 
+  const handleSaveTrack = async (orderId: number) => {
+    const trackNumber = (trackDrafts[orderId] ?? '').trim();
+    if (!trackNumber) {
+      alert('Введите трек-номер перед отправкой');
+      return;
+    }
+    setUpdatingId(orderId);
+    try {
+      await api.patch(`/orders/${orderId}/track`, { trackNumber });
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, trackNumber } : o))
+      );
+      alert(`Трек-номер ${trackNumber} сохранён и отправлен клиенту в Telegram!`);
+    } catch (err) {
+      console.error('Track update error:', err);
+      alert(err instanceof Error ? err.message : 'Не удалось сохранить трек-номер');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const handleCreatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -744,13 +765,24 @@ export function Admin() {
                     </div>
 
                     {order.status !== 'DONE' && order.status !== 'CANCELLED' && (
-                      <div className="flex flex-col gap-2">
-                        <input
-                          value={trackDrafts[order.id] ?? order.trackNumber ?? ''}
-                          onChange={(e) => setTrackDrafts({ ...trackDrafts, [order.id]: e.target.value })}
-                          placeholder="Трек-номер (уйдёт клиенту вместе со статусом)"
-                          className="w-full rounded-lg border border-line bg-pastel-ivory/50 px-3 py-2 text-xs outline-none focus:border-primary"
-                        />
+                      <div className="flex flex-col gap-2.5">
+                        <div className="flex gap-2">
+                          <input
+                            value={trackDrafts[order.id] ?? order.trackNumber ?? ''}
+                            onChange={(e) => setTrackDrafts({ ...trackDrafts, [order.id]: e.target.value })}
+                            placeholder="Трек-номер (СДЭК, Почта...)"
+                            className="flex-1 rounded-xl border border-line bg-pastel-ivory/50 px-3 py-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveTrack(order.id)}
+                            disabled={updatingId === order.id}
+                            className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm transition-transform active:scale-95 disabled:opacity-50 flex items-center gap-1"
+                          >
+                            <Icon name="shipping" size={13} />
+                            Отправить трек
+                          </button>
+                        </div>
                         <div className="flex gap-1.5 flex-wrap">
                           {STATUSES.filter((s) => s !== order.status).map((s) => (
                             <button

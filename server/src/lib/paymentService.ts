@@ -392,28 +392,48 @@ async function notifyPaid(order: {
   }
 }
 
-/** Уведомление клиента о смене статуса заказа (вызывается из админки). */
+/** Уведомление клиента о смене статуса заказа и трек-номере (вызывается из админки). */
 export async function notifyOrderStatus(
   telegramUserId: bigint,
   orderId: number,
   status: string,
+  trackNumber?: string,
+  deliveryMethod?: string,
 ): Promise<void> {
   const labels: Record<string, string> = {
     NEW: 'принят',
-    CONFIRMED: 'подтверждён',
+    CONFIRMED: 'подтверждён и передан в сборку',
     SHIPPED: 'отправлен',
     DONE: 'доставлен',
     CANCELLED: 'отменён',
   };
-  const label = labels[status];
-  if (!label) return;
+  const label = labels[status] || status;
+
+  let text = `📦 *Заказ №${orderId} ${label}!*\n`;
+
+  if (status === 'SHIPPED') {
+    text += `\n🚚 Ваш заказ уже в пути!`;
+    if (deliveryMethod) {
+      text += `\n📦 Доставка: *${deliveryMethod}*`;
+    }
+    if (trackNumber) {
+      text += `\n🔎 Трек-номер для отслеживания: \`${trackNumber}\``;
+    }
+  } else if (trackNumber) {
+    text += `\n🔎 Трек-номер для отслеживания: \`${trackNumber}\``;
+  }
+
+  if (status === 'DONE') {
+    text += `\n✨ Спасибо за покупку в MISHKIN! Будем рады вашим отзывам и новым заказам.`;
+  }
 
   try {
     await bot.telegram.sendMessage(
       telegramUserId.toString(),
-      `📦 Заказ №${orderId} ${label}.`,
+      text,
+      { parse_mode: 'Markdown' },
     );
   } catch (error) {
-    console.warn('[payments] статус клиенту не доставлен', telegramUserId.toString(), error);
+    console.warn('[payments] статус/трек клиенту не доставлен', telegramUserId.toString(), error);
   }
 }
