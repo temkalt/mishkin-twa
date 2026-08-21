@@ -14,7 +14,8 @@ import {
   applyPaymentStatus,
   buildReturnUrl,
 } from '../lib/paymentService.js';
-import { isYooKassaIp, clientIp } from '../lib/ipAllowlist.js';
+import { isYooKassaIp } from '../lib/ipAllowlist.js';
+import { isAdminId } from '../lib/admins.js';
 import { renderMockCheckout } from '../lib/mockCheckoutPage.js';
 
 export const paymentsPublicRouter = Router();
@@ -34,7 +35,11 @@ const rub = (kopecks: number) => (kopecks / 100).toLocaleString('ru-RU');
  * https://yookassa.ru/developers/using-api/webhooks
  */
 paymentsPublicRouter.post('/webhook', async (req, res) => {
-  const ip = clientIp(req.headers as Record<string, unknown>, req.ip);
+  // Адрес берём из req.ip: Express с `trust proxy: 1` сам отбрасывает один хоп
+  // прокси и отдаёт настоящего отправителя. Свой разбор X-Forwarded-For здесь
+  // читал ЛЕВОЕ значение заголовка — то, что подставил клиент, — и любой запрос
+  // с «X-Forwarded-For: 185.71.76.1» проходил проверку как уведомление ЮKassa.
+  const ip = req.ip;
 
   if (process.env.YOOKASSA_WEBHOOK_CHECK_IP !== 'false' && !isYooKassaIp(ip)) {
     console.warn('[payments] уведомление с посторонного IP отклонено:', ip);
@@ -57,13 +62,22 @@ paymentsPublicRouter.post('/webhook', async (req, res) => {
     if (event.startsWith('payment.') && object.id) {
       const result = await syncPaymentStatus(object.id);
       console.log(`[payments] ${event} → заказ #${result.orderId ?? '?'}: ${result.paymentStatus ?? result.reason}`);
-    } else if (event === 'refund.succeeded' && object.payment_id) {
-      await applyPaymentStatus({
-        paymentId: object.payment_id,
-        status: 'REFUNDED',
-        event,
-        payload: object,
-      });
+    } else if (event === 'refund.succeeded' && object.id) {
+      // Тело уведомления не источник истины (см. syncPaymentStatus для платежей):
+      // перезапрашиваем возврат у API и берём payment_id и статус оттуда, иначе
+      // достаточно было прислать «refund.succeeded» с чужим payment_id, чтобы
+      // отметить оплаченный заказ возвращённым.
+      const refund = await yoo.getRefund(object.id);
+      if (refund.status !== 'succeeded') {
+        console.warn(`[payments] возврат ${object.id} в статусе ${refund.status} — пропускаем`);
+      } else {
+        await applyPaymentStatus({
+          paymentId: refund.payment_id,
+          status: 'REFUNDED',
+          event,
+          payload: refund,
+        });
+      }
     }
     // 200 обязателен, иначе ЮKassa будет ретраить сутки.
     res.status(200).json({ received: true });
@@ -125,8 +139,7 @@ function ownsOrder(req: { telegramUser?: { id: number } }, telegramUserId: bigin
   if (userId === undefined) return false;
   if (BigInt(userId) === telegramUserId) return true;
 
-  const admins = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => id.trim());
-  return admins.includes(String(userId));
+  return isAdminId(userId);
 }
 
 /** GET /api/payments/config — что показывать в интерфейсе оплаты. */

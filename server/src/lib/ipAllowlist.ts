@@ -54,11 +54,9 @@ export function isYooKassaIp(rawIp: string | undefined): boolean {
   return V6_PREFIXES.some((prefix) => lower.startsWith(prefix));
 }
 
-/** Адрес клиента с учётом прокси (Vercel/Caddy/nginx кладут его в X-Forwarded-For). */
-export function clientIp(headers: Record<string, unknown>, fallback?: string): string {
-  const forwarded = headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim();
-  }
-  return fallback || '';
-}
+// Адрес отправителя берём из req.ip, а не разбираем X-Forwarded-For сами.
+// Здесь был свой разбор, который брал ЛЕВОЕ значение заголовка, — то есть то,
+// что подставил сам клиент: достаточно было прислать
+// «X-Forwarded-For: 185.71.76.1», и запрос выглядел как уведомление ЮKassa.
+// Express с trust proxy: 1 отбрасывает один хоп прокси справа и отдаёт
+// настоящий адрес.

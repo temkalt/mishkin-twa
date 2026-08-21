@@ -41,7 +41,12 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json({ limit: '15mb' }));
+
+// Большое тело нужно ровно одной точке — созданию товара: фотографии приходят
+// base64-строками в JSON. Остальным 15 МБ не нужны и опасны: публичный вебхук
+// оплаты парсится ДО проверки IP, то есть кто угодно мог прислать туда 15 МБ.
+app.use('/api/products', express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '256kb' }));
 
 // --- Bot webhook (до validateTelegram: Telegram не присылает initData) ---
 // secretToken заставляет Telegraf проверять заголовок
@@ -78,7 +83,7 @@ app.use('/api', validateTelegram);
 // Точки, где имеет смысл ограничить частоту: создание заказов, промокоды, авторизация.
 const writeLimiter = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-// --- Routes ---
+// --- Роуты ---
 app.use('/api/products', productsRouter);
 app.use('/api/orders', writeLimiter, ordersRouter);
 app.use('/api/promo', writeLimiter, promoRouter);
@@ -96,12 +101,12 @@ app.get('/health', async (_req, res) => {
       payments: yoo.describeMode(),
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch {
     res.status(503).json({ status: 'degraded', db: 'down', timestamp: new Date().toISOString() });
   }
 });
 
-// --- Global Error Handler ---
+// --- Обработчик ошибок ---
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Global Error]', err);
   const status = err.status || 500;
@@ -111,7 +116,8 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   });
 });
 
-// --- Start Local Server ---
+// Локальный запуск. На Vercel слушать порт не нужно — там экспортируется
+// приложение, а бота дёргает вебхук, поэтому launchBot() здесь и только здесь.
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     const mode = yoo.describeMode();
@@ -125,5 +131,5 @@ if (!process.env.VERCEL) {
   launchBot();
 }
 
-// Export for Vercel Serverless
+// Vercel забирает приложение как serverless-функцию.
 export default app;

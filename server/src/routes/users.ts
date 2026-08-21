@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../middleware/isAdmin.js';
 import { bot } from '../lib/bot.js';
+import { isAdminId } from '../lib/admins.js';
 
 const router = Router();
 
@@ -16,8 +17,9 @@ router.post('/auth', async (req, res) => {
       return;
     }
 
-    const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => id.trim());
-    const userIsAdmin = adminIds.includes(tgUser.id.toString());
+    // Флаг только для интерфейса: сервер всё равно перепроверяет права на каждом
+    // админском роуте через middleware/isAdmin.ts.
+    const userIsAdmin = isAdminId(tgUser.id);
 
     // Гостя из браузерного демо в базу не пишем — иначе статистика засоряется.
     if (tgUser.id === 0) {

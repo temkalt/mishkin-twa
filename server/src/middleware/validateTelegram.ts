@@ -9,7 +9,6 @@ export interface TelegramUser {
   language_code?: string;
 }
 
-// Extend Express Request
 declare global {
   namespace Express {
     interface Request {
@@ -18,6 +17,9 @@ declare global {
   }
 }
 
+/** Сколько живёт подпись initData. Столько же держит окно и сам Telegram. */
+const INIT_DATA_TTL_SECONDS = 86400;
+
 /**
  * Разрешён ли доступ без Telegram initData.
  *
@@ -25,6 +27,10 @@ declare global {
  * браузере (заказчику, без Telegram). В остальных случаях запрос без подписи
  * отклоняется — иначе `POST /api/orders` дёргается откуда угодно и в базу
  * летит спам.
+ *
+ * Внимание: все анонимные посетители получают один и тот же id = 0, то есть
+ * общий «кабинет». В боевом окружении флаг должен быть выключен, иначе один
+ * гость видит заказы другого (имя, телефон, адрес) через GET /api/orders.
  */
 function guestAccessAllowed(): boolean {
   return process.env.NODE_ENV === 'development' || process.env.ALLOW_BROWSER_DEMO === 'true';
@@ -41,8 +47,13 @@ function hashesEqual(a: string, b: string): boolean {
 }
 
 /**
- * Middleware для криптографической валидации initData от Telegram.
+ * Валидация initData по схеме Telegram: HMAC-SHA256, где ключ сам получен как
+ * HMAC от строки «WebAppData» на токене бота.
  * https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+ *
+ * Личность пользователя берётся ТОЛЬКО из подписанной строки: поле `user`
+ * читается уже после сверки хэша, поэтому подменить свой id в теле запроса
+ * нельзя — оно вообще не участвует в авторизации.
  */
 export function validateTelegram(req: Request, res: Response, next: NextFunction): void {
   const initData = req.headers['x-telegram-init-data'] as string | undefined;
@@ -65,7 +76,6 @@ export function validateTelegram(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 1. Parse initData into key-value pairs
     const urlParams = new URLSearchParams(initData);
     const hash = urlParams.get('hash');
     if (!hash) {
@@ -73,37 +83,37 @@ export function validateTelegram(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 2. Remove hash and sort remaining params alphabetically
+    // Подписывается всё, кроме самого hash, отсортированное по имени ключа.
     urlParams.delete('hash');
-    const dataCheckArr: string[] = [];
     urlParams.sort();
+    const dataCheckArr: string[] = [];
     urlParams.forEach((value, key) => {
       dataCheckArr.push(`${key}=${value}`);
     });
     const dataCheckString = dataCheckArr.join('\n');
 
-    // 3. Create HMAC-SHA256 signature
     const secretKey = createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
     const hmac = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
-    // 4. Compare hashes
     if (!hashesEqual(hmac, hash)) {
       res.status(401).json({ error: 'Invalid init data signature' });
       return;
     }
 
-    // 5. Check auth_date (not older than 24 hours)
+    // auth_date обязателен: подпись сама по себе бессрочна, и без отметки
+    // времени перехваченный initData работал бы вечно. Отсутствие поля — повод
+    // отказать, а не пропустить проверку.
     const authDate = urlParams.get('auth_date');
-    if (authDate) {
-      const authTimestamp = parseInt(authDate, 10);
-      const now = Math.floor(Date.now() / 1000);
-      if (now - authTimestamp > 86400) {
-        res.status(401).json({ error: 'Init data expired' });
-        return;
-      }
+    const authTimestamp = authDate ? parseInt(authDate, 10) : NaN;
+    if (!Number.isFinite(authTimestamp)) {
+      res.status(401).json({ error: 'Init data has no auth_date' });
+      return;
+    }
+    if (Math.floor(Date.now() / 1000) - authTimestamp > INIT_DATA_TTL_SECONDS) {
+      res.status(401).json({ error: 'Init data expired' });
+      return;
     }
 
-    // 6. Extract user data
     const userParam = urlParams.get('user');
     if (!userParam) {
       res.status(401).json({ error: 'Init data has no user' });

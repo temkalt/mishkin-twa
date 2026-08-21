@@ -48,6 +48,14 @@ export interface YooPayment {
   created_at?: string;
 }
 
+export interface YooRefund {
+  id: string;
+  status: 'pending' | 'succeeded' | 'canceled';
+  payment_id: string;
+  amount: YooAmount;
+  created_at?: string;
+}
+
 export interface ReceiptItem {
   description: string;
   quantity: number;
@@ -195,6 +203,14 @@ export async function getPayment(paymentId: string): Promise<YooPayment> {
 
 export async function cancelPayment(paymentId: string, idempotenceKey: string): Promise<YooPayment> {
   return call<YooPayment>('POST', `/payments/${encodeURIComponent(paymentId)}/cancel`, {}, idempotenceKey);
+}
+
+/**
+ * Возврат по id. Нужен обработчику уведомления refund.succeeded: тело
+ * уведомления — не доказательство, статус подтверждает только сам API.
+ */
+export async function getRefund(refundId: string): Promise<YooRefund> {
+  return call<YooRefund>('GET', `/refunds/${encodeURIComponent(refundId)}`);
 }
 
 export async function createRefund(

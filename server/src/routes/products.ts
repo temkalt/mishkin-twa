@@ -43,7 +43,9 @@ router.get('/', async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Parse JSON images field
+    // images в базе — строка JSON (см. CLAUDE.md), а цена — копейки: делим ровно
+    // здесь, на границе ответа. Клиент, получивший копейки, покажет цену в 100 раз
+    // больше — эта ошибка уже случалась в share() на карточке товара.
     const parsed = products.map((p) => ({
       ...p,
       images: JSON.parse(p.images),

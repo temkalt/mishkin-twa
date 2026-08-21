@@ -82,7 +82,7 @@ function shell(body: string): string {
 
 /** Страница «оплаты»: сумма, фейковые реквизиты и две кнопки-сценария. */
 export function renderMockCheckout(params: MockPageParams): string {
-  const { paymentId, orderId, amountRub, returnUrl } = params;
+  const { paymentId, orderId, amountRub } = params;
 
   if (params.status === 'PAID' || params.status === 'CANCELED') {
     return renderMockResult({ ...params, outcome: params.status === 'PAID' ? 'succeeded' : 'canceled' });
