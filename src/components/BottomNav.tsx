@@ -1,11 +1,13 @@
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { haptic } from '../utils/haptics';
+import { spring } from '../utils/motion';
 import { useCartStore } from '../store/useCartStore';
 import { useUserStore } from '../store/useUserStore';
-import { Icon, type IconName } from './Icon';
+import { NavIcon, type NavIconName } from './NavIcon';
 
-const ALL_TABS: Array<{ path: string; icon: IconName; label: string; adminOnly?: boolean }> = [
+const ALL_TABS: Array<{ path: string; icon: NavIconName; label: string; adminOnly?: boolean }> = [
   { path: '/', icon: 'home', label: 'Главная' },
   { path: '/catalog', icon: 'grid', label: 'Каталог' },
   { path: '/cart', icon: 'shopping_bag', label: 'Корзина' },
@@ -25,6 +27,17 @@ export function BottomNav() {
   const navigate = useNavigate();
   const cartCount = useCartStore((s) => s.getItemCount());
   const isAdmin = useUserStore((s) => s.isAdmin);
+
+  // Всплеск иконки привязан к смене адреса, а не к onClick: тогда он играет и при
+  // программном переходе (кнопка «В каталог» из пустой корзины), и при системной
+  // кнопке «назад». Счётчик, а не флаг, — чтобы повторное нажатие уже активной
+  // вкладки тоже запускало анимацию: pathname при этом не меняется.
+  const [burst, setBurst] = useState({ path: location.pathname, n: 0 });
+  useEffect(() => {
+    setBurst((prev) =>
+      prev.path === location.pathname ? prev : { path: location.pathname, n: prev.n + 1 },
+    );
+  }, [location.pathname]);
 
   const tabs = ALL_TABS.filter((t) => !t.adminOnly || isAdmin);
 
@@ -47,31 +60,45 @@ export function BottomNav() {
             return (
               <button
                 key={tab.path}
+                type="button"
                 onClick={() => {
-                  if (isActive) return;
-                  haptic.select();
+                  if (isActive) {
+                    // Уже здесь: адрес не изменится, поэтому всплеск запускаем руками,
+                    // и отклик мягче — это не переход, а просто «тык».
+                    haptic.tap();
+                    setBurst((prev) => ({ path: tab.path, n: prev.n + 1 }));
+                    return;
+                  }
+                  haptic.press();
                   navigate(tab.path);
                 }}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={tab.label}
-                className="relative flex flex-col items-center gap-1 px-4 py-1.5"
+                className="relative flex flex-col items-center gap-1 rounded-xl px-4 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 {isActive && (
                   <motion.div
-                    layoutId="nav-indicator"
-                    className="absolute inset-0 rounded-xl bg-primary/10"
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    layoutId="activeTab"
+                    className="absolute inset-0 rounded-xl bg-gradient-to-b from-primary/[0.14] to-primary/5 ring-1 ring-inset ring-primary/10"
+                    transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.7 }}
                   />
                 )}
 
-                <div className="relative">
-                  <motion.span
-                    className={`relative z-10 block transition-colors ${isActive ? 'text-primary' : 'text-text-sub'}`}
-                    animate={{ scale: isActive ? [1, 1.22, 1.1] : 1, y: isActive ? [-2, 0] : 0 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                  >
-                    <Icon name={tab.icon} size={21} filled={isActive} />
-                  </motion.span>
+                {/* whileTap живёт здесь, а не на кнопке: масштабирование родителя
+                    капсулы ломает layout-проекцию framer, и плашка при нажатии
+                    дёргается на соседнюю вкладку. */}
+                <motion.div
+                  className={`relative z-10 transition-colors duration-300 ${
+                    isActive ? 'text-primary' : 'text-text-sub'
+                  }`}
+                  whileTap={{ scale: 0.85 }}
+                  transition={spring.snappy}
+                >
+                  <NavIcon
+                    name={tab.icon}
+                    active={isActive}
+                    burstKey={burst.path === tab.path ? burst.n : 0}
+                  />
 
                   {tab.path === '/cart' && cartCount > 0 && (
                     <AnimatePresence>
@@ -87,7 +114,7 @@ export function BottomNav() {
                       </motion.span>
                     </AnimatePresence>
                   )}
-                </div>
+                </motion.div>
 
                 <motion.span
                   className={`relative z-10 text-[10px] font-semibold transition-colors ${
