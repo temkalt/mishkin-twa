@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import { prisma } from './prisma.js';
 import * as yoo from './yookassa.js';
 import { bot } from './bot.js';
+import { adminIds } from './admins.js';
+import { escapeMd, escapeMdCode } from './telegramText.js';
 
 export type OrderPaymentStatus = 'UNPAID' | 'PENDING' | 'PAID' | 'CANCELED' | 'REFUNDED';
 
@@ -346,14 +348,6 @@ export async function resolveMockPayment(
   });
 }
 
-function adminIds(): number[] {
-  return (process.env.ADMIN_IDS || '')
-    .replace(/["']/g, '')
-    .split(',')
-    .map((id) => parseInt(id.trim(), 10))
-    .filter((id) => Number.isFinite(id) && id > 0);
-}
-
 const rub = (kopecks: number) => (kopecks / 100).toLocaleString('ru-RU');
 
 /** Сообщаем менеджеру и клиенту, что заказ оплачен. */
@@ -365,10 +359,10 @@ async function notifyPaid(order: {
   paymentMethod: string;
   tgUsername: string | null;
 }): Promise<void> {
-  const method = order.paymentMethod ? ` (${order.paymentMethod})` : '';
+  const method = order.paymentMethod ? ` (${escapeMd(order.paymentMethod)})` : '';
   const adminText =
     `💳 *Заказ #${order.id} оплачен*\n\n` +
-    `👤 ${order.userName}${order.tgUsername ? ` (@${order.tgUsername})` : ''}\n` +
+    `👤 ${escapeMd(order.userName)}${order.tgUsername ? ` (@${escapeMd(order.tgUsername)})` : ''}\n` +
     `💰 Сумма: ${rub(order.totalPrice)} ₽${method}\n` +
     (yoo.isTestShop() ? `\n⚠️ Тестовый контур — реальных денег нет.` : '');
 
@@ -414,13 +408,13 @@ export async function notifyOrderStatus(
   if (status === 'SHIPPED') {
     text += `\n🚚 Ваш заказ уже в пути!`;
     if (deliveryMethod) {
-      text += `\n📦 Доставка: *${deliveryMethod}*`;
+      text += `\n📦 Доставка: *${escapeMd(deliveryMethod)}*`;
     }
     if (trackNumber) {
-      text += `\n🔎 Трек-номер для отслеживания: \`${trackNumber}\``;
+      text += `\n🔎 Трек-номер для отслеживания: \`${escapeMdCode(trackNumber)}\``;
     }
   } else if (trackNumber) {
-    text += `\n🔎 Трек-номер для отслеживания: \`${trackNumber}\``;
+    text += `\n🔎 Трек-номер для отслеживания: \`${escapeMdCode(trackNumber)}\``;
   }
 
   if (status === 'DONE') {

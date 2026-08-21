@@ -1,5 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 import { prisma } from './prisma.js';
+import { adminIds, isAdminId } from './admins.js';
+import { escapeMd } from './telegramText.js';
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = (process.env.WEBAPP_URL || 'https://mishkin-twa.vercel.app').replace(/\/+$/, '');
@@ -9,36 +11,33 @@ if (!BOT_TOKEN) {
   console.error('CRITICAL: BOT_TOKEN is missing!');
 }
 
+// Токен-заглушка вместо падения на импорте: без неё модуль нельзя было бы
+// подключить в тестах и на сборке, где бот не нужен. Запросы к Telegram с ней
+// просто получают 401.
 export const bot = new Telegraf(BOT_TOKEN || 'dummy_token');
 
-// ==========================================
-// СИСТЕМА ДИАЛОГОВ ПОДДЕРЖКИ (МЕНЕДЖЕР <-> КЛИЕНТ)
-// ==========================================
+// ---------------------------------------------------------------------------
+// Мост «клиент ↔ менеджер»
+//
+// ВНИМАНИЕ: состояние диалогов живёт в памяти процесса. На Vercel каждый апдейт
+// приходит в свою лямбду, поэтому связка «кто с кем говорит» там теряется между
+// сообщениями — мост рассчитан на постоянный процесс (VPS, локальный запуск).
+// Перенос в БД требует отдельной миграции, см. PRODUCTION_PLAN.md.
+// ---------------------------------------------------------------------------
 
-/** Привязка: ID пользователя -> ID админа, который ведет диалог */
 const userToAdmin = new Map<number, number>();
-
-/** Привязка: ID админа -> ID пользователя, с которым открыт диалог */
 const adminToUser = new Map<number, number>();
 
-/** Пользователи, ожидающие ответа менеджера: ID -> данные */
 interface WaitingUser {
   name: string;
   username?: string;
   requestedAt: Date;
   initialQuestion?: string;
 }
+/** Клиенты, нажавшие «Связь с менеджером», но ещё никем не принятые. */
 const waitingUsers = new Map<number, WaitingUser>();
 
-function getAdminIds(): number[] {
-  return (process.env.ADMIN_IDS || '')
-    .replace(/["']/g, '')
-    .split(',')
-    .map((id) => parseInt(id.trim(), 10))
-    .filter((id) => Number.isFinite(id) && id > 0);
-}
-
-/** Инициация запроса на связь с менеджером */
+/** Запрос клиента на связь с менеджером: и по команде, и по кнопке. */
 async function initiateSupportRequest(ctx: any) {
   const tgUser = ctx.from;
   if (!tgUser) return;
@@ -77,12 +76,13 @@ async function initiateSupportRequest(ctx: any) {
     }
   );
 
-  // Уведомляем всех администраторов
-  const admins = getAdminIds();
-  const userLink = tgUser.username ? `@${tgUser.username}` : `[Профиль](tg://user?id=${userId})`;
+  // Имя и юзернейм задаёт сам клиент: без экранирования «Иван_Петров» ломает
+  // разметку, Telegram отвечает 400 и менеджер не получает запрос вообще.
+  const admins = adminIds();
+  const userLink = tgUser.username ? `@${escapeMd(tgUser.username)}` : `[Профиль](tg://user?id=${userId})`;
   const alertText =
     `🆘 *Запрос помощи от клиента!*\n\n` +
-    `👤 Клиент: *${name}* (${userLink})\n` +
+    `👤 Клиент: *${escapeMd(name)}* (${userLink})\n` +
     `🆔 ID: \`${userId}\`\n\n` +
     `Нажмите кнопку ниже, чтобы подключиться к диалогу:`;
 
@@ -100,7 +100,7 @@ async function initiateSupportRequest(ctx: any) {
   }
 }
 
-/** Завершение сессии поддержки */
+/** Закрывает сессию с обеих сторон: и у клиента, и у принявшего менеджера. */
 async function closeSupportSession(userId: number, adminIdOverride?: number) {
   const adminId = adminIdOverride || userToAdmin.get(userId);
 
@@ -136,16 +136,16 @@ async function closeSupportSession(userId: number, adminIdOverride?: number) {
   } catch {}
 }
 
-// ==========================================
-// КОМАНДЫ БОТА
-// ==========================================
+// ---------------------------------------------------------------------------
+// Команды
+// ---------------------------------------------------------------------------
 
-// /start command
 bot.start(async (ctx) => {
   const tgUser = ctx.from;
   const firstName = tgUser.first_name || 'друг';
 
-  // Сохраняем/обновляем пользователя в базе для статистики
+  // Апсерт нужен для статистики: пользователь мог ни разу не открыть Mini App,
+  // но /start в боте уже сделал. Ошибка записи не должна мешать ответу.
   try {
     await prisma.user.upsert({
       where: { telegramId: BigInt(tgUser.id) },
@@ -176,7 +176,8 @@ bot.start(async (ctx) => {
     console.error('Failed to set menu button', e);
   }
 
-  // Обработка диплинков /start product_12 или /start p12
+  // Диплинк на товар: /start product_12, /start p_12 или просто /start 12 —
+  // ссылками такого вида делятся из карточки товара в приложении.
   const payload = (ctx as any).startPayload as string | undefined;
   if (payload) {
     const prodMatch = payload.match(/^(?:product_|p_|prod_)?(\d+)$/);
@@ -187,8 +188,8 @@ bot.start(async (ctx) => {
         if (prod) {
           const priceRub = (prod.price / 100).toLocaleString('ru-RU');
           await ctx.reply(
-            `✨ *${prod.name}*\n\n` +
-            (prod.description ? `${prod.description}\n\n` : '') +
+            `✨ *${escapeMd(prod.name)}*\n\n` +
+            (prod.description ? `${escapeMd(prod.description)}\n\n` : '') +
             `💰 *Цена: ${priceRub} ₽*\n\n` +
             `Нажмите кнопку ниже, чтобы открыть товар в приложении:`,
             {
@@ -209,7 +210,7 @@ bot.start(async (ctx) => {
   }
 
   await ctx.reply(
-    `Добро пожаловать в *MISHKIN*, ${firstName}!\n\n` +
+    `Добро пожаловать в *MISHKIN*, ${escapeMd(firstName)}!\n\n` +
     `Мы создаём авторские изделия и уютный декор ручной работы с душой.\n\n` +
     `Нажмите кнопку ниже, чтобы открыть витрину или связаться с менеджером.`,
     {
@@ -223,18 +224,16 @@ bot.start(async (ctx) => {
   );
 });
 
-// /support, /help, /manager commands
 bot.command(['support', 'manager'], initiateSupportRequest);
 
-// Кнопка "💬 Связь с менеджером"
 bot.action('request_support', async (ctx) => {
   await ctx.answerCbQuery();
   await initiateSupportRequest(ctx);
 });
 
-// Отмена запроса клиентом
 bot.action(/^cancel_support:(\d+)$/, async (ctx) => {
   const userId = parseInt(ctx.match[1], 10);
+  // Отменить может только сам заявитель: id в callback_data приходит от клиента.
   if (ctx.from.id !== userId) return;
 
   waitingUsers.delete(userId);
@@ -252,20 +251,19 @@ bot.action(/^cancel_support:(\d+)$/, async (ctx) => {
   } catch {}
 });
 
-// Принятие диалога администратором
+// Менеджер принимает диалог. callback_data содержит id клиента, поэтому кнопку
+// можно переслать кому угодно — права проверяем не по факту нажатия, а по ADMIN_IDS.
 bot.action(/^take_support:(\d+)$/, async (ctx) => {
   const targetUserId = parseInt(ctx.match[1], 10);
   const adminId = ctx.from.id;
   const adminName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || 'Менеджер';
 
-  // Проверка прав администратора
-  const admins = getAdminIds();
-  if (!admins.includes(adminId)) {
+  if (!isAdminId(adminId)) {
     await ctx.answerCbQuery('⚠️ У вас нет прав администратора', { show_alert: true });
     return;
   }
 
-  // Проверка: занят ли диалог
+  // Диалог ведёт один менеджер — иначе клиент получает два ответа на один вопрос.
   if (userToAdmin.has(targetUserId)) {
     const currentAdminId = userToAdmin.get(targetUserId);
     if (currentAdminId === adminId) {
@@ -279,7 +277,7 @@ bot.action(/^take_support:(\d+)$/, async (ctx) => {
     return;
   }
 
-  // Проверка: не ведёт ли этот админ уже диалог с кем-то ещё
+  // Один менеджер — один клиент: иначе его ответы полетят не тому.
   if (adminToUser.has(adminId)) {
     const activeClient = adminToUser.get(adminId);
     await ctx.answerCbQuery(
@@ -289,7 +287,6 @@ bot.action(/^take_support:(\d+)$/, async (ctx) => {
     return;
   }
 
-  // Закрепляем сессию
   userToAdmin.set(targetUserId, adminId);
   adminToUser.set(adminId, targetUserId);
   const waitingInfo = waitingUsers.get(targetUserId);
@@ -299,7 +296,7 @@ bot.action(/^take_support:(\d+)$/, async (ctx) => {
 
   try {
     await ctx.editMessageText(
-      `✅ *Вы подключились к диалогу с клиентом ${waitingInfo?.name || ''} (ID: \`${targetUserId}\`)*\n\n` +
+      `✅ *Вы подключились к диалогу с клиентом ${escapeMd(waitingInfo?.name || '')} (ID: \`${targetUserId}\`)*\n\n` +
       `Все ваши сообщения в этот чат будут мгновенно пересылаться клиенту.\n\n` +
       `Чтобы завершить диалог, нажмите кнопку ниже или отправьте /close.`,
       {
@@ -311,11 +308,10 @@ bot.action(/^take_support:(\d+)$/, async (ctx) => {
     );
   } catch {}
 
-  // Уведомляем клиента
   try {
     await bot.telegram.sendMessage(
       targetUserId,
-      `👨‍💼 *Менеджер ${adminName} подключился к диалогу!*\n\n` +
+      `👨‍💼 *Менеджер ${escapeMd(adminName)} подключился к диалогу!*\n\n` +
       `Напишите ваш вопрос или сообщение прямо сюда — менеджер вам ответит.\n\n` +
       `Для завершения диалога нажмите кнопку ниже или введите /close.`,
       {
@@ -330,12 +326,11 @@ bot.action(/^take_support:(\d+)$/, async (ctx) => {
   }
 });
 
-// Завершение диалога по кнопке
 bot.action(/^close_support:(\d+)$/, async (ctx) => {
   const userId = parseInt(ctx.match[1], 10);
   const callerId = ctx.from.id;
 
-  // Завершить может либо сам клиент, либо назначенный админ
+  // Закрыть диалог вправе только его участники — id в кнопке подделывается.
   if (callerId === userId || userToAdmin.get(userId) === callerId) {
     await ctx.answerCbQuery('Диалог завершается...');
     await closeSupportSession(userId, userToAdmin.get(userId));
@@ -344,7 +339,8 @@ bot.action(/^close_support:(\d+)$/, async (ctx) => {
   }
 });
 
-// Команда /close или /stop для завершения диалога
+// /close работает и для менеджера, и для клиента, и для неподтверждённой заявки —
+// поэтому разбираем три случая по очереди.
 bot.command(['close', 'stop', 'end'], async (ctx) => {
   const callerId = ctx.from.id;
 
@@ -368,7 +364,6 @@ bot.command(['close', 'stop', 'end'], async (ctx) => {
   await ctx.reply('У вас нет активных диалогов.');
 });
 
-// /help command
 bot.help((ctx) => {
   ctx.reply(
     '✨ *MISHKIN — Авторские изделия и декор ручной работы*\n\n' +
@@ -385,25 +380,30 @@ bot.help((ctx) => {
   );
 });
 
-// ==========================================
-// МАРШРУТИЗАЦИЯ СООБЩЕНИЙ (ПЕРЕСЫЛКА)
-// ==========================================
+// ---------------------------------------------------------------------------
+// Пересылка сообщений внутри моста
+//
+// Порядок проверок = приоритет роли: сначала менеджер в активном диалоге, затем
+// клиент в диалоге, затем клиент, ждущий менеджера, и лишь потом «обычное»
+// сообщение. Любой чужой текст экранируется — он уходит с parse_mode Markdown,
+// и незакрытая звёздочка не «портит вёрстку», а роняет доставку с 400.
+// ---------------------------------------------------------------------------
 
 bot.on('message', async (ctx) => {
   const fromId = ctx.from.id;
   const message = ctx.message as any;
 
-  // 1. Сообщение от АДМИНИСТРАТОРА клиенту
   if (adminToUser.has(fromId)) {
     const targetUserId = adminToUser.get(fromId)!;
     try {
       if (message.text) {
         await bot.telegram.sendMessage(
           targetUserId,
-          `💬 *Менеджер:*\n${message.text}`,
+          `💬 *Менеджер:*\n${escapeMd(message.text)}`,
           { parse_mode: 'Markdown' }
         );
       } else {
+        // Фото, голосовое, документ — copyMessage переносит вложение как есть.
         await bot.telegram.copyMessage(targetUserId, fromId, message.message_id);
       }
     } catch (err) {
@@ -413,7 +413,6 @@ bot.on('message', async (ctx) => {
     return;
   }
 
-  // 2. Сообщение от КЛИЕНТА администратору (активный диалог)
   if (userToAdmin.has(fromId)) {
     const targetAdminId = userToAdmin.get(fromId)!;
     const userName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || 'Клиент';
@@ -421,13 +420,13 @@ bot.on('message', async (ctx) => {
       if (message.text) {
         await bot.telegram.sendMessage(
           targetAdminId,
-          `👤 *Клиент (${userName}):*\n${message.text}`,
+          `👤 *Клиент (${escapeMd(userName)}):*\n${escapeMd(message.text)}`,
           { parse_mode: 'Markdown' }
         );
       } else {
         await bot.telegram.sendMessage(
           targetAdminId,
-          `👤 *Клиент (${userName}) прислал вложение:*`,
+          `👤 *Клиент (${escapeMd(userName)}) прислал вложение:*`,
           { parse_mode: 'Markdown' }
         );
         await bot.telegram.copyMessage(targetAdminId, fromId, message.message_id);
@@ -438,17 +437,20 @@ bot.on('message', async (ctx) => {
     return;
   }
 
-  // 3. Сообщение от КЛИЕНТА, который нажал "Связь с менеджером" и пишет свой вопрос
+  // Клиент уже нажал «Связь с менеджером», но его пока никто не принял —
+  // вопрос всё равно уходит всем админам вместе с кнопкой «Принять».
   if (waitingUsers.has(fromId)) {
-    const userLink = ctx.from.username ? `@${ctx.from.username}` : `[Профиль](tg://user?id=${fromId})`;
+    const userLink = ctx.from.username
+      ? `@${escapeMd(ctx.from.username)}`
+      : `[Профиль](tg://user?id=${fromId})`;
     const name = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || 'Клиент';
 
-    const admins = getAdminIds();
+    const admins = adminIds();
     const alertText =
       `🆘 *Сообщение от клиента (ждёт менеджера)*\n\n` +
-      `👤 Клиент: *${name}* (${userLink})\n` +
+      `👤 Клиент: *${escapeMd(name)}* (${userLink})\n` +
       `🆔 ID: \`${fromId}\`\n\n` +
-      `💬 *Вопрос/Сообщение:*\n${message.text || '[Вложение]'}`;
+      `💬 *Вопрос/Сообщение:*\n${escapeMd(message.text) || '[Вложение]'}`;
 
     for (const adminId of admins) {
       try {
@@ -470,7 +472,7 @@ bot.on('message', async (ctx) => {
     return;
   }
 
-  // 4. Обычное текстовое сообщение вне диалога — подсказываем меню
+  // Команды обрабатываются своими хендлерами — на них не отвечаем подсказкой.
   if (message.text && !message.text.startsWith('/')) {
     await ctx.reply(
       'Здравствуйте! Чтобы сделать заказ или посмотреть каталог, откройте магазин.\n' +
@@ -486,13 +488,19 @@ bot.on('message', async (ctx) => {
   }
 });
 
+/**
+ * Long polling — только для локального запуска. На Vercel бот работает вебхуком
+ * (см. index.ts), поэтому launchBot() там не вызывается: лямбда не живёт между
+ * апдейтами, а два способа доставки одновременно Telegram не разрешает.
+ */
 export function launchBot() {
   bot.launch({
+    // Накопившиеся за простой апдейты пропускаем: иначе после перезапуска
+    // менеджер получает лавину старых сообщений.
     dropPendingUpdates: true,
   });
   console.log('🤖 Telegram bot launched with manager support bridge');
 
-  // Graceful shutdown
   process.once('SIGINT', () => bot.stop('SIGINT'));
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
 }

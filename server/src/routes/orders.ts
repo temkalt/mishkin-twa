@@ -5,6 +5,8 @@ import { isAdmin } from '../middleware/isAdmin.js';
 import { bot } from '../lib/bot.js';
 import { notifyOrderStatus } from '../lib/paymentService.js';
 import { isAvailable, releaseStockForOrder, reserveStock, type StockError } from '../lib/stock.js';
+import { adminIds, isAdminId } from '../lib/admins.js';
+import { escapeMd } from '../lib/telegramText.js';
 import {
   DELIVERY_OPTIONS,
   FREE_DELIVERY_FROM,
@@ -239,36 +241,36 @@ async function notifyNewOrder(params: {
 }): Promise<void> {
   const { order, orderItems, deliveryLabel, discount, appliedPromo } = params;
 
-  const adminIds = (process.env.ADMIN_IDS || '')
-    .replace(/["']/g, '')
-    .split(',')
-    .map((id) => parseInt(id.trim(), 10))
-    .filter((id) => Number.isFinite(id) && id > 0);
-  if (adminIds.length === 0) return;
+  const admins = adminIds();
+  if (admins.length === 0) return;
 
+  // Всё, что ввёл покупатель, экранируем: сообщение уходит с parse_mode
+  // 'Markdown', и одна звёздочка в комментарии или подчёркивание в имени
+  // раньше означали не сломанную вёрстку, а 400 от Telegram — заказ приходил,
+  // а уведомление о нём нет (см. lib/telegramText.ts).
   const itemsText = orderItems
-    .map((item) => `  • ${item.name} × ${item.qty} = ${rub(item.price * item.qty)} ₽`)
+    .map((item) => `  • ${escapeMd(item.name)} × ${item.qty} = ${rub(item.price * item.qty)} ₽`)
     .join('\n');
 
   const tgLink = order.tgUsername
-    ? `[@${order.tgUsername}](https://t.me/${order.tgUsername})`
+    ? `[@${escapeMd(order.tgUsername)}](https://t.me/${encodeURIComponent(order.tgUsername)})`
     : `[Профиль](tg://user?id=${order.telegramUserId.toString()})`;
 
   const message =
     `🔔 *Новый заказ #${order.id}*\n\n` +
-    `👤 Клиент: ${order.userName} (TG: ${tgLink})\n` +
-    `📱 Телефон: ${order.userPhone}\n` +
-    `🚚 Доставка: ${deliveryLabel}\n` +
-    (order.userCity ? `🏙 Город: ${order.userCity}\n` : '') +
-    (order.userAddress ? `📍 Адрес: ${order.userAddress}\n` : '') +
-    (order.userPostal ? `📮 Индекс: ${order.userPostal}\n` : '') +
-    (order.comment ? `💬 Комментарий: ${order.comment}\n` : '') +
+    `👤 Клиент: ${escapeMd(order.userName)} (TG: ${tgLink})\n` +
+    `📱 Телефон: ${escapeMd(order.userPhone)}\n` +
+    `🚚 Доставка: ${escapeMd(deliveryLabel)}\n` +
+    (order.userCity ? `🏙 Город: ${escapeMd(order.userCity)}\n` : '') +
+    (order.userAddress ? `📍 Адрес: ${escapeMd(order.userAddress)}\n` : '') +
+    (order.userPostal ? `📮 Индекс: ${escapeMd(order.userPostal)}\n` : '') +
+    (order.comment ? `💬 Комментарий: ${escapeMd(order.comment)}\n` : '') +
     `\n📦 Товары:\n${itemsText}\n\n` +
-    (discount > 0 ? `🏷 Промокод: ${appliedPromo} (−${rub(discount)} ₽)\n` : '') +
+    (discount > 0 ? `🏷 Промокод: ${escapeMd(appliedPromo)} (−${rub(discount)} ₽)\n` : '') +
     `💰 *Итого: ${rub(order.totalPrice)} ₽*\n` +
     `${order.paymentType === 'ONLINE' ? '💳 Ожидает онлайн-оплату' : '🤝 Оплата при получении / по договорённости'}`;
 
-  for (const adminId of adminIds) {
+  for (const adminId of admins) {
     try {
       await bot.telegram.sendMessage(adminId, message, {
         parse_mode: 'Markdown',
@@ -284,8 +286,7 @@ async function notifyNewOrder(params: {
 router.get('/', async (req, res) => {
   try {
     const telegramUserId = req.telegramUser?.id ?? 0;
-    const adminIds = (process.env.ADMIN_IDS || '').replace(/["']/g, '').split(',').map((id) => id.trim());
-    const isUserAdmin = adminIds.includes(telegramUserId.toString());
+    const isUserAdmin = isAdminId(telegramUserId);
 
     const take = Math.min(Number(req.query.limit) || 50, 100);
     const skip = Math.max(Number(req.query.offset) || 0, 0);
@@ -297,10 +298,25 @@ router.get('/', async (req, res) => {
       skip,
     });
 
+    const items = orders.map((order) => {
+      try {
+        return JSON.parse(order.items) as Array<{ productId: number; image?: string }>;
+      } catch {
+        return [];
+      }
+    });
+
     // Картинки товаров могли появиться уже после заказа — подставим свежие.
-    const allProducts = await prisma.product.findMany({ select: { id: true, images: true } });
+    // Спрашиваем только те товары, что реально встречаются в этой странице
+    // заказов: раньше здесь читался весь каталог, а images — это base64-строки,
+    // то есть на каждый вызов из базы тянулись все фотографии магазина.
+    const neededIds = [...new Set(items.flat().map((item) => item.productId).filter(Boolean))];
+    const products = neededIds.length
+      ? await prisma.product.findMany({ where: { id: { in: neededIds } }, select: { id: true, images: true } })
+      : [];
+
     const imageById = new Map<number, string>();
-    for (const product of allProducts) {
+    for (const product of products) {
       try {
         imageById.set(product.id, (JSON.parse(product.images) as string[])[0] || '');
       } catch {
@@ -308,10 +324,10 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const parsed = orders.map((order) => ({
+    const parsed = orders.map((order, index) => ({
       ...order,
       telegramUserId: Number(order.telegramUserId),
-      items: (JSON.parse(order.items) as Array<{ productId: number; image?: string }>).map((item) => ({
+      items: items[index].map((item) => ({
         ...item,
         image: item.image || imageById.get(item.productId) || '',
       })),
@@ -373,10 +389,21 @@ router.patch('/:id/status', isAdmin, async (req, res) => {
 });
 
 // PATCH /api/orders/:id/track — обновить трек-номер и отправить в ЛС клиенту (только админ)
+const trackSchema = z.object({
+  // Пустая строка разрешена: так админка снимает ошибочно введённый трек.
+  trackNumber: z.string().trim().max(60).default(''),
+});
+
 router.patch('/:id/track', isAdmin, async (req, res) => {
+  const parsed = trackSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Некорректный трек-номер' });
+    return;
+  }
+
   try {
     const id = parseInt(String(req.params.id), 10);
-    const trackNumber = String(req.body.trackNumber || '').trim();
+    const trackNumber = parsed.data.trackNumber;
 
     const order = await prisma.order.update({
       where: { id },
