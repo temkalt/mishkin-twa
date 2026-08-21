@@ -6,6 +6,8 @@ const STORAGE_KEY = 'mishkin_subscribed';
 /** Когда истекает «возможно, позже». Без этого попап всплывал при каждом входе. */
 const SNOOZE_KEY = 'mishkin_subscribe_snoozed_until';
 const SNOOZE_DAYS = 7;
+/** Адрес канала переопределяется сборкой — в коде он был захардкожен в двух местах. */
+const CHANNEL_URL = import.meta.env.VITE_CHANNEL_URL || 'https://t.me/mishkin_candles';
 
 export function SubscriptionPopup() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,8 +18,8 @@ export function SubscriptionPopup() {
     const snoozedUntil = Number(localStorage.getItem(SNOOZE_KEY) || 0);
     if (snoozedUntil > Date.now()) return;
 
-    // 2 секунды — это поверх ещё не осмотренного каталога. Даём успеть
-    // осмотреться, прежде чем что-то просить.
+    // Шесть секунд — попап всплывает поверх ещё не осмотренного каталога, поэтому
+    // сначала даём человеку осмотреться и только потом просим подписку.
     const timer = setTimeout(() => setIsOpen(true), 6000);
     return () => clearTimeout(timer);
   }, []);
@@ -28,16 +30,19 @@ export function SubscriptionPopup() {
   };
 
   const handleSubscribe = () => {
-    // Mark as subscribed so we never show again
+    // Факт подписки не проверить: Telegram не сообщает Mini App, вступил ли человек
+    // в канал. Поэтому считаем нажатие согласием и больше не спрашиваем — повторный
+    // попап у подписчика раздражает сильнее, чем упущенная подписка.
     localStorage.setItem(STORAGE_KEY, 'true');
     setIsOpen(false);
 
-    // Open channel link
+    // Внутри Telegram канал открываем через openTelegramLink: window.open там
+    // выкидывает пользователя во внешний браузер и приложение теряет контекст.
     const tg = (window as any).Telegram?.WebApp;
     if (tg && tg.openTelegramLink) {
-      tg.openTelegramLink('https://t.me/mishkin_candles');
+      tg.openTelegramLink(CHANNEL_URL);
     } else {
-      window.open('https://t.me/mishkin_candles', '_blank');
+      window.open(CHANNEL_URL, '_blank');
     }
   };
 

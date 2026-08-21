@@ -51,7 +51,13 @@ function plural(count: number): string {
 
 export function Catalog() {
   const navigate = useNavigate();
-  const { products, isLoading, error, fetchProducts } = useProductStore();
+  // Подписываемся по полям, а не деструктуризацией всего стора: без селектора
+  // Zustand дёргает рендер на любой set(), включая служебные loadedAt/featured,
+  // которых этой странице не видно.
+  const products = useProductStore((s) => s.products);
+  const isLoading = useProductStore((s) => s.isLoading);
+  const error = useProductStore((s) => s.error);
+  const fetchProducts = useProductStore((s) => s.fetchProducts);
   const addItem = useCartStore((s) => s.addItem);
 
   const [searchQuery, setSearchQuery] = useState('');

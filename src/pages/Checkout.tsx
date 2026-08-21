@@ -29,8 +29,16 @@ interface FormState {
 
 export function Checkout() {
   const navigate = useNavigate();
-  const { items, getTotal, clear } = useCartStore();
-  const { delivery, payment, load, isLoading } = useShopConfig();
+  // Подписываемся по полям, а не деструктуризацией всего стора: без селектора
+  // Zustand дёргает рендер на любой set(), включая служебные loadedAt/featured,
+  // которых этой странице не видно.
+  const items = useCartStore((s) => s.items);
+  const getTotal = useCartStore((s) => s.getTotal);
+  const clear = useCartStore((s) => s.clear);
+  const delivery = useShopConfig((s) => s.delivery);
+  const payment = useShopConfig((s) => s.payment);
+  const load = useShopConfig((s) => s.load);
+  const isLoading = useShopConfig((s) => s.isLoading);
   const orderSubmittedRef = useRef(false);
 
   const [form, setForm] = useState<FormState>({

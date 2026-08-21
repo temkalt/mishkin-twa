@@ -30,7 +30,15 @@ function SkeletonCard() {
 
 export function Home() {
   const navigate = useNavigate();
-  const { featured, fetchFeatured, products, fetchProducts, isLoading, error } = useProductStore();
+  // Подписываемся по полям, а не деструктуризацией всего стора: без селектора
+  // Zustand дёргает рендер на любой set(), включая служебные loadedAt/featured,
+  // которых этой странице не видно.
+  const featured = useProductStore((s) => s.featured);
+  const products = useProductStore((s) => s.products);
+  const isLoading = useProductStore((s) => s.isLoading);
+  const error = useProductStore((s) => s.error);
+  const fetchFeatured = useProductStore((s) => s.fetchFeatured);
+  const fetchProducts = useProductStore((s) => s.fetchProducts);
 
   const { scrollY } = useScroll();
   const heroTextY = useTransform(scrollY, [0, 320], [0, 70]);

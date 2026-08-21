@@ -17,8 +17,15 @@ const money = (value: number) => value.toLocaleString('ru-RU');
 
 export function Cart() {
   const navigate = useNavigate();
-  const { items, removeItem, updateQty, getTotal } = useCartStore();
-  const { delivery, load } = useShopConfig();
+  // Подписываемся по полям, а не деструктуризацией всего стора: без селектора
+  // Zustand дёргает рендер на любой set(), включая служебные loadedAt/featured,
+  // которых этой странице не видно.
+  const items = useCartStore((s) => s.items);
+  const removeItem = useCartStore((s) => s.removeItem);
+  const updateQty = useCartStore((s) => s.updateQty);
+  const getTotal = useCartStore((s) => s.getTotal);
+  const delivery = useShopConfig((s) => s.delivery);
+  const load = useShopConfig((s) => s.load);
   // Каталог нужен корзине только ради остатков: показать «в наличии N шт.» и не
   // дать уйти в чекаут с количеством, которое сервер отклонит.
   const products = useProductStore((s) => s.products);

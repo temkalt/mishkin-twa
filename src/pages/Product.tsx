@@ -34,7 +34,15 @@ export function Product() {
   const layoutIdPrefix = (location.state as { layoutIdPrefix?: string } | null)?.layoutIdPrefix || 'product';
   const { id } = useParams();
 
-  const { currentProduct, isLoading, error, fetchProduct, products, fetchProducts } = useProductStore();
+  // Подписываемся по полям, а не деструктуризацией всего стора: без селектора
+  // Zustand дёргает рендер на любой set(), включая служебные loadedAt/featured,
+  // которых этой странице не видно.
+  const currentProduct = useProductStore((s) => s.currentProduct);
+  const isLoading = useProductStore((s) => s.isLoading);
+  const error = useProductStore((s) => s.error);
+  const products = useProductStore((s) => s.products);
+  const fetchProduct = useProductStore((s) => s.fetchProduct);
+  const fetchProducts = useProductStore((s) => s.fetchProducts);
   const addItem = useCartStore((s) => s.addItem);
   const updateQty = useCartStore((s) => s.updateQty);
 
@@ -87,11 +95,19 @@ export function Product() {
 
     // Прямая ссылка на Mini App внутри Telegram:
     // https://t.me/<bot_username>/<app_name>?startapp=product_<id>
-    const botUsername = import.meta.env.VITE_BOT_USERNAME || 'VanDayBot';
-    const appShortName = import.meta.env.VITE_APP_SHORT_NAME || 'app';
-    const directAppLink = `https://t.me/${botUsername}/${appShortName}?startapp=product_${currentProduct.id}`;
-    const priceText = (currentProduct.price / 100).toLocaleString('ru-RU');
-    const shareText = `✨ Посмотри «${currentProduct.name}» (${priceText} ₽) в магазине MISHKIN:`;
+    //
+    // Юзернейм подставлять «по умолчанию» нельзя: здесь стоял хардкод чужого бота,
+    // и при незаданной переменной покупатель делился ссылкой в посторонний магазин
+    // (та же причина, что и в server/src/lib/channelPost.ts). Без переменной шлём
+    // веб-адрес приложения — он ведёт на ту же карточку.
+    const botUsername = (import.meta.env.VITE_BOT_USERNAME || '').replace(/^@/, '').trim();
+    const appShortName = (import.meta.env.VITE_APP_SHORT_NAME || '').trim();
+    const directAppLink = botUsername
+      ? `https://t.me/${botUsername}${appShortName ? `/${appShortName}` : ''}?startapp=product_${currentProduct.id}`
+      : `${window.location.origin}/product/${currentProduct.id}`;
+    // API отдаёт цену уже в рублях (см. money() ниже в разметке) — делённая на 100
+    // она превращала 2 800 ₽ в «28 ₽» прямо в тексте, которым делятся с друзьями.
+    const shareText = `✨ Посмотри «${currentProduct.name}» (${money(currentProduct.price)} ₽) в магазине MISHKIN:`;
 
     const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(directAppLink)}&text=${encodeURIComponent(shareText)}`;
 
