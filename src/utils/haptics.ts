@@ -1,10 +1,10 @@
-// Semantic haptic feedback engine for the Mishkin Mini App.
+// Тактильная отдача по смыслу действия, а не по силе удара.
 //
-// Maps high-level user *actions* (not raw impact styles) to Telegram
-// HapticFeedback when running inside Telegram, and falls back to the Web
-// Vibration API (navigator.vibrate) with real millisecond patterns everywhere
-// else. Short taps and long/layered buzzes are deliberately distinguished per
-// action so the interface *feels* different depending on what you did.
+// Компоненты вызывают haptic.tap() / haptic.success() и не знают, где выполняются:
+// внутри Telegram работает HapticFeedback, в браузере — navigator.vibrate с
+// настоящими миллисекундными паттернами. Разделение «короткое касание» против
+// «длинного слоистого» сделано осознанно: добавление товара и ошибка оплаты должны
+// ощущаться по-разному, иначе тактильная отдача превращается в шум.
 
 import { getWebApp } from './telegram';
 
@@ -39,8 +39,9 @@ const webVibrate = (pattern: number | number[]) => {
   try { navigator.vibrate(pattern); } catch { /* noop */ }
 };
 
-// Telegram exposes no duration control, so a longer / textured buzz is
-// emulated by scheduling a short sequence of impacts.
+// Длительностью вибрации Telegram управлять не даёт — только «стилем удара».
+// Долгую или «текстурную» отдачу приходится собирать из нескольких коротких
+// импульсов с паузами.
 const tgSequence = (steps: Array<[ImpactStyle, number]>) => {
   let delay = 0;
   for (const [style, gap] of steps) {
@@ -51,71 +52,72 @@ const tgSequence = (steps: Array<[ImpactStyle, number]>) => {
 };
 
 /**
- * The app's tactile vocabulary. Reach for the action that matches intent —
- * never call the Telegram API directly from components.
+ * Тактильный словарь приложения. Из компонентов вызываем действие по смыслу
+ * (tap, addToCart, celebrate) и никогда не трогаем HapticFeedback напрямую:
+ * иначе браузерная ветка теряется и вне Telegram отдачи нет вообще.
  */
 export const haptic = {
-  /** SHORT · light — routine touches: opening a card, back button. */
+  /** Короткое лёгкое — рядовые касания: открыть карточку, кнопка «назад». */
   tap() {
     if (hasTelegramHaptics()) tgImpact('light');
     else webVibrate(10);
   },
 
-  /** SHORT · selection — tabs, category pills, option toggles, qty steppers. */
+  /** Выбор — табы, категории, переключение опций, счётчик количества. */
   select() {
     if (hasTelegramHaptics()) tgSelection();
     else webVibrate(8);
   },
 
-  /** MEDIUM — primary button press, committing navigation. */
+  /** Среднее — нажатие главной кнопки, переход, который что-то подтверждает. */
   press() {
     if (hasTelegramHaptics()) tgImpact('medium');
     else webVibrate(18);
   },
 
-  /** SHORT · crisp — switches / segmented controls. */
+  /** Резкое короткое — тумблеры и сегментированные переключатели. */
   toggle() {
     if (hasTelegramHaptics()) tgImpact('rigid');
     else webVibrate([12]);
   },
 
-  /** SHORT double-pulse — satisfying "added to cart" confirmation. */
+  /** Двойной импульс — «товар добавлен», должно ощущаться как щелчок защёлки. */
   addToCart() {
     if (hasTelegramHaptics()) tgSequence([['medium', 70], ['light', 0]]);
     else webVibrate([14, 45, 22]);
   },
 
-  /** SHORT · soft — removing / deleting an item. */
+  /** Мягкое — удаление товара: убирающее действие не должно быть резким. */
   remove() {
     if (hasTelegramHaptics()) tgImpact('soft');
     else webVibrate(22);
   },
 
-  /** LONG · sustained heavy — long-press / press-and-hold affordances. */
+  /** Долгое насыщенное — долгое нажатие и удержание. */
   longPress() {
     if (hasTelegramHaptics()) tgSequence([['heavy', 55], ['heavy', 55], ['rigid', 0]]);
     else webVibrate(90);
   },
 
-  /** Positive result — promo applied, saved. */
+  /** Успех — промокод применён, изменения сохранены. */
   success() {
     if (hasTelegramHaptics()) tgNotify('success');
     else webVibrate([10, 40, 80]);
   },
 
-  /** Cautionary result. */
+  /** Предупреждение. */
   warning() {
     if (hasTelegramHaptics()) tgNotify('warning');
     else webVibrate([20, 60, 20]);
   },
 
-  /** Negative result — invalid promo, failed action. */
+  /** Отказ — неверный промокод, неудавшееся действие. */
   error() {
     if (hasTelegramHaptics()) tgNotify('error');
     else webVibrate([40, 40, 40, 40, 40]);
   },
 
-  /** LONG · layered celebration — order placed. */
+  /** Долгое многослойное — заказ оформлен, единственное «празднование» в приложении. */
   celebrate() {
     if (hasTelegramHaptics()) {
       tgNotify('success');

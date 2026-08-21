@@ -10,9 +10,9 @@ interface RevealProps {
 }
 
 /**
- * Scroll-triggered reveal. Fades + lifts its children into view the first time
- * they enter the viewport. Wraps the shared `fadeUp` variant so timing stays
- * consistent with the rest of the app.
+ * Проявление при прокрутке. Обёртка над общим вариантом fadeUp — так тайминги
+ * совпадают с остальным приложением, а не подбираются в каждом разделе заново.
+ * once по умолчанию true: повторная анимация при скролле вверх-вниз раздражает.
  */
 export function Reveal({ children, className, delay = 0, once = true }: RevealProps) {
   return (

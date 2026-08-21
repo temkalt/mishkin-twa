@@ -5,7 +5,9 @@ interface SplashProps {
   onComplete: () => void;
 }
 
-// A few ambient particles drifting upward like warm embers.
+// Искры заданы таблицей, а не сгенерированы случайно: со Math.random() каждый
+// рендер сдвигал частицы и анимация дёргалась. Значения подобраны так, чтобы
+// задержки не совпадали и поток выглядел живым.
 const EMBERS = [
   { x: '-42%', d: 0.0, s: 3, dur: 3.2 },
   { x: '-18%', d: 0.5, s: 2, dur: 3.8 },

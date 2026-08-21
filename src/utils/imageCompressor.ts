@@ -52,7 +52,8 @@ export function compressImageFile(
             return;
           }
         } catch {
-          // fallback to jpeg
+          // Safari до 17 не умеет toDataURL('image/webp') и молча отдаёт PNG,
+          // поэтому проверяем префикс и падаем в JPEG — он есть везде.
         }
 
         resolve(canvas.toDataURL('image/jpeg', quality));

@@ -5,14 +5,15 @@ import { EASE_OUT } from '../utils/motion';
 interface AnimatedNumberProps {
   value: number;
   className?: string;
-  /** Appended after the formatted number, e.g. ' ₽'. */
+  /** Подставляется после числа — например, ' ₽'. */
   suffix?: string;
   duration?: number;
 }
 
 /**
- * Smoothly counts from its previous value to the new one whenever `value`
- * changes — used for cart totals so price updates feel alive, not instant.
+ * Перематывает число от прежнего значения к новому. Нужно в корзине: сумма там
+ * меняется от каждого шага счётчика, и мгновенная подмена цифр читается как
+ * подёргивание, а не как пересчёт.
  */
 export function AnimatedNumber({ value, className, suffix = '', duration = 0.5 }: AnimatedNumberProps) {
   const mv = useMotionValue(value);

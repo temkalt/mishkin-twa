@@ -156,16 +156,13 @@ export function Admin() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [trackDrafts, setTrackDrafts] = useState<Record<number, string>>({});
 
-  // Forms state
   const [showPromoForm, setShowPromoForm] = useState(false);
   const [promoForm, setPromoForm] = useState({ code: '', type: 'PERCENT', value: '', limit: '' });
 
-  // Broadcast state
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; successCount: number; failCount: number } | null>(null);
 
-  // Channel Post state
   const [channelPostForm, setChannelPostForm] = useState({ text: '', photoUrl: '', buttonText: '🛍 Открыть магазин', startParam: 'channel' });
   const [isChannelPosting, setIsChannelPosting] = useState(false);
   const [channelPostResult, setChannelPostResult] = useState<{ success: boolean; messageId: number; url: string } | null>(null);

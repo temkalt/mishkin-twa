@@ -23,7 +23,9 @@ const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin }
 // Верхний уровень навигации: здесь Telegram-кнопка «назад» не нужна.
 const TOP_LEVEL_ROUTES = ['/', '/catalog', '/cart', '/orders', '/admin'];
 
-// Minimal inline fallback — avoids spinner flash between route changes
+// Инлайновый фолбэк для React.lazy: полноэкранный сплэш между роутами мигал бы
+// на каждом переходе, поэтому здесь только три точки внизу и задержка 0.15 с —
+// при быстрой загрузке чанка пользователь не видит вообще ничего.
 function PageFallback() {
   return (
     <div className="flex min-h-screen items-end justify-center bg-background-light pb-32">
@@ -67,13 +69,14 @@ function App() {
     void useShopConfig.getState().load();
   }, []);
 
-  // Обработка диплинков (Telegram start_param и URL params):
-  // 1. Возврат из оплаты: start_param=paid-<id> -> /order/:id
-  // 2. Ссылка «Поделиться товаром»: start_param=product_<id> -> /product/:id
+  // Диплинки приходят четырьмя разными путями, и все четыре реально встречаются:
+  // start_param в initDataUnsafe (запуск из бота/канала), tgWebAppStartParam или
+  // startapp в query (Telegram кладёт параметр туда при открытии по прямой ссылке),
+  // и наши собственные ?paid=/?product= — ими возвращается внешний браузер после
+  // страницы ЮKassa, где никакого Telegram-контекста уже нет.
   useEffect(() => {
     if (showSplash) return;
 
-    // Читаем параметр из Telegram WebApp initDataUnsafe
     const startParam = getWebApp()?.initDataUnsafe?.start_param;
     if (startParam) {
       const paidMatch = startParam.match(/^paid-(\d+)$/);
@@ -88,7 +91,6 @@ function App() {
       }
     }
 
-    // Читаем параметр из URL (tgWebAppStartParam / startapp / paid / product)
     const params = new URLSearchParams(window.location.search);
     const tgParam = params.get('tgWebAppStartParam') || params.get('startapp');
     if (tgParam) {
@@ -117,7 +119,10 @@ function App() {
     }
   }, [showSplash, navigate]);
 
-  // Telegram BackButton
+  // Системную кнопку «назад» Telegram показываем только на вложенных экранах:
+  // на верхнем уровне она уводила бы из приложения. offEvent в cleanup обязателен —
+  // WebApp живёт вне React, и без него на каждый переход накапливался бы лишний
+  // обработчик, а один клик прокручивал историю на несколько шагов назад.
   useEffect(() => {
     const webApp = getWebApp();
     if (!isInTelegram() || !webApp) return;
