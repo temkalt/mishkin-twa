@@ -12,6 +12,7 @@
 
 import 'dotenv/config';
 import { spawnSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 
 const SCHEMA = '_mishkin_e2e';
 const PORT = 3999;
@@ -57,6 +58,28 @@ const check = (name, ok, detail = '') => {
 };
 
 let server;
+
+// Подпись initData ровно по схеме Telegram: ключ — HMAC от строки «WebAppData»
+// на токене бота. Токен здесь заглушка и известен скрипту, поэтому подпись
+// собирается локально и запрос проходит validateTelegram по-настоящему.
+//
+// Раньше админские вызовы шли гостевым путём (ADMIN_IDS='0' на id гостя), и
+// подписанная ветка авторизации не проверялась вообще. Теперь нулевой id
+// админом не считается (lib/admins.ts) — иначе браузерное демо открывало бы
+// админку, — так что тест обязан предъявить настоящую подпись.
+const signInitData = (fields) => {
+  const params = new URLSearchParams(fields);
+  params.sort();
+  const dataCheckString = [...params].map(([key, value]) => `${key}=${value}`).join('\n');
+  const secretKey = createHmac('sha256', 'WebAppData').update(process.env.BOT_TOKEN).digest();
+  params.set('hash', createHmac('sha256', secretKey).update(dataCheckString).digest('hex'));
+  return params.toString();
+};
+
+const ADMIN_ID = 777000777;
+const ADMIN_USER = { id: ADMIN_ID, first_name: 'E2E Админ', username: 'e2e_admin' };
+const adminInitData = () =>
+  signInitData({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify(ADMIN_USER) });
 
 try {
   console.log(`\n1. Готовим временную схему ${SCHEMA}`);
@@ -210,6 +233,37 @@ try {
   const onlyMine = Array.isArray(orders.json) && orders.json.every((o) => o.userName !== 'Чужой');
   check('в списке заказов только свои', onlyMine, `видно ${orders.json.length} заказ(ов)`);
 
+  // Сама авторизация: до этого тест ходил только гостевым путём (демо-режим),
+  // и подписанная ветка не проверялась ни разу.
+  const authGet = (initData) => fetch(`${api}/orders`, { headers: { 'X-Telegram-Init-Data': initData } });
+
+  const signed = await authGet(adminInitData());
+  check('подписанный initData принят', signed.status === 200);
+
+  const tampered = adminInitData().replace(/hash=[0-9a-f]+/, `hash=${'0'.repeat(64)}`);
+  check('подделанная подпись отклонена', (await authGet(tampered)).status === 401);
+
+  // auth_date обязателен: без отметки времени перехваченный initData жил бы вечно.
+  const noAuthDate = signInitData({ user: JSON.stringify(ADMIN_USER) });
+  check('initData без auth_date отклонён', (await authGet(noAuthDate)).status === 401);
+
+  const expired = signInitData({
+    auth_date: String(Math.floor(Date.now() / 1000) - 86_400 - 60),
+    user: JSON.stringify(ADMIN_USER),
+  });
+  check('просроченный initData отклонён (>24 ч)', (await authGet(expired)).status === 401);
+
+  // Ноль в ADMIN_IDS (лишняя запятая, пустое значение) не должен открывать
+  // админку гостю браузерного демо — он приходит именно с id = 0.
+  process.env.ADMIN_IDS = '0';
+  const zeroAdmin = await fetch(`${api}/orders/${order.id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'DONE' }),
+  });
+  process.env.ADMIN_IDS = '';
+  check('ADMIN_IDS=0 не делает админом гостя', zeroAdmin.status === 403);
+
   console.log('\n8. Склад: списание, нехватка и возврат при отмене');
   const limited = await admin.product.create({
     data: {
@@ -247,14 +301,17 @@ try {
   const listed = Array.isArray(catalog.json) ? catalog.json.find((p) => p.id === limited.id) : null;
   check('каталог отдаёт остаток фронту', listed?.stock === 0, `stock=${listed?.stock}`);
 
-  // Отмену делает админ: ADMIN_IDS читается на каждом запросе, поэтому гостя
-  // (id = 0) можно сделать админом только на эти два вызова.
+  // Отмену делает подписанный админ: ADMIN_IDS читается на каждом запросе,
+  // поэтому его id добавляется в переменную ровно на эти два вызова.
   const cancel = async (orderId) => {
-    process.env.ADMIN_IDS = '0';
+    process.env.ADMIN_IDS = String(ADMIN_ID);
     try {
       return await fetch(`${api}/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': adminInitData(),
+        },
         body: JSON.stringify({ status: 'CANCELLED' }),
       });
     } finally {
